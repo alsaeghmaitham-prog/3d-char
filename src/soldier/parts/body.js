@@ -1,0 +1,486 @@
+// Body: head, hair, neck, jacket (torso, collar, placket), sleeves, hands and
+// trousers. Everything is authored in the T-pose bind space (metres, +Z
+// forward, +X = character's left) and bound to the humanoid rig.
+import * as THREE from 'three';
+import { Poly, loft, ellipseRing, axisTube, chamferBox, thickSheet, strap, lerp, smooth, clamp } from '../lowpoly.js';
+import { DIM, quatFromAxes } from '../rig.js';
+
+// ---------------------------------------------------------------------------
+// Torso description (shared with gear that sits on the jacket)
+// ---------------------------------------------------------------------------
+
+// y, half width, front depth, back depth, centre z, superellipse power
+export const TORSO = [
+  [0.7, 0.237, 0.164, 0.16, 0.0, 2.6],
+  [0.74, 0.23, 0.159, 0.156, 0.0, 2.6],
+  [0.8, 0.218, 0.15, 0.147, 0.0, 2.6],
+  [0.875, 0.205, 0.141, 0.139, 0.004, 2.7],
+  [0.96, 0.201, 0.143, 0.14, 0.008, 2.7],
+  [1.06, 0.21, 0.15, 0.144, 0.01, 2.8],
+  [1.16, 0.216, 0.155, 0.147, 0.01, 2.8],
+  [1.24, 0.216, 0.149, 0.145, 0.004, 2.8],
+  [1.31, 0.206, 0.13, 0.134, -0.002, 2.6],
+];
+
+export function torsoParams(y) {
+  const T = TORSO;
+  if (y <= T[0][0]) return T[0];
+  for (let i = 0; i < T.length - 1; i++) {
+    if (y <= T[i + 1][0]) {
+      const t = (y - T[i][0]) / (T[i + 1][0] - T[i][0]);
+      return T[i].map((v, k) => lerp(v, T[i + 1][k], t));
+    }
+  }
+  return T[T.length - 1];
+}
+
+/** Point on the jacket surface. theta: 0 = front, +PI/2 = character's left. */
+export function torsoPoint(theta, y, offset = 0) {
+  const [, a, bf, bb, cz, pw] = torsoParams(y);
+  const s = Math.sin(theta);
+  const c = Math.cos(theta);
+  const e = 2 / pw;
+  const x = Math.sign(s) * Math.pow(Math.abs(s), e) * a;
+  const z = Math.sign(c) * Math.pow(Math.abs(c), e) * (c >= 0 ? bf : bb);
+  const p = new THREE.Vector3(x, y, cz + z);
+  if (offset) p.addScaledVector(torsoNormal(theta, y), offset);
+  return p;
+}
+
+/** z of the jacket's back surface at (x, y) — used to make packs hug the back. */
+export function torsoBackZ(x, y) {
+  const [, a, , bb, cz, pw] = torsoParams(Math.min(y, 1.3));
+  const u = Math.min(0.999, Math.abs(x) / a);
+  return cz - bb * Math.pow(1 - Math.pow(u, pw), 1 / pw);
+}
+
+export function torsoNormal(theta, y) {
+  const d = 0.004;
+  const t1 = torsoPoint(theta + d, y).sub(torsoPoint(theta - d, y));
+  const t2 = torsoPoint(theta, y + d).sub(torsoPoint(theta, y - d));
+  return new THREE.Vector3().crossVectors(t1, t2).normalize();
+}
+
+/** Skin weights for anything glued to the jacket, by height. */
+export function torsoWeights(y) {
+  if (y <= 0.9) return [['Hips', 1]];
+  if (y < 1.0) {
+    const t = smooth((y - 0.9) / 0.1);
+    return [
+      ['Hips', 1 - t],
+      ['Spine', t],
+    ];
+  }
+  if (y <= 1.08) return [['Spine', 1]];
+  if (y < 1.16) {
+    const t = smooth((y - 1.08) / 0.08);
+    return [
+      ['Spine', 1 - t],
+      ['Chest', t],
+    ];
+  }
+  return [['Chest', 1]];
+}
+
+// Upper torso rings above the shoulder line, as functions of theta.
+function superPoint(theta, a, bf, bb, cz, pw, y) {
+  const sn = Math.sin(theta);
+  const c = Math.cos(theta);
+  const e = 2 / pw;
+  return new THREE.Vector3(Math.sign(sn) * Math.pow(Math.abs(sn), e) * a, y, cz + Math.sign(c) * Math.pow(Math.abs(c), e) * (c >= 0 ? bf : bb));
+}
+const TOP_RINGS = [
+  // trapezius: higher at the sides than front/back -> hunched, high shoulders
+  (t) => superPoint(t, 0.16, 0.104, 0.112, -0.004, 2.4, 1.338 + 0.05 * Math.pow(Math.sin(t), 2)),
+  (t) => superPoint(t, 0.08, 0.074, 0.078, -0.006, 2, 1.372 + 0.012 * (1 - Math.cos(t))),
+];
+const PROFILE = [...TORSO.map(([y, a, bf, bb, cz, pw]) => (t) => superPoint(t, a, bf, bb, cz, pw, y)), ...TOP_RINGS];
+
+/**
+ * Point + outward normal on the jacket surface at angle theta and height y,
+ * valid all the way up to the collar line.
+ */
+export function torsoSurface(theta, y) {
+  const pts = PROFILE.map((f) => f(theta));
+  for (let k = 0; k < pts.length - 1; k++) {
+    const A = pts[k],
+      B = pts[k + 1];
+    if ((y >= A.y && y <= B.y) || k === pts.length - 2) {
+      const t = THREE.MathUtils.clamp((y - A.y) / Math.max(1e-6, B.y - A.y), 0, 1);
+      const p = A.clone().lerp(B, t);
+      const radial = new THREE.Vector3(p.x, 0, p.z).normalize();
+      const dr = Math.hypot(B.x, B.z) - Math.hypot(A.x, A.z);
+      const dy = B.y - A.y;
+      const n = radial.multiplyScalar(dy).add(new THREE.Vector3(0, -dr, 0)).normalize();
+      return { p, n };
+    }
+  }
+  return { p: pts[pts.length - 1], n: new THREE.Vector3(0, 1, 0) };
+}
+
+let _torsoCache = null;
+/** The (deterministic) jacket mesh, cached for surface queries by gear. */
+export function torsoMesh() {
+  if (!_torsoCache) _torsoCache = buildTorso();
+  return _torsoCache;
+}
+
+export function buildTorso() {
+  const N = 12;
+  const rings = PROFILE.map((f) => {
+    const r = [];
+    for (let i = 0; i < N; i++) r.push(f((i / N) * Math.PI * 2));
+    return r;
+  });
+  // inner lip closing the hem
+  const lip = ellipseRing({ n: N, rx: 0.2, rz: 0.136, rzBack: 0.132, y: 0.722, power: 2.6 });
+  const poly = loft([lip, ...rings], { mat: 'uniform', start: 'flat', end: 'flat' });
+  poly.jitter(0.0055, 11, [1, 0.5, 1], (p) => p.y > 0.705 && p.y < 1.36);
+  poly.skinBy((p) => torsoWeights(p.y));
+
+  // placket down the centre front
+  const ys = [0.705, 0.78, 0.86, 0.96, 1.06, 1.16, 1.24, 1.29];
+  const path = ys.map((y) => torsoPoint(0, y, 0.0015));
+  const normals = ys.map((y) => torsoNormal(0, y));
+  const placket = strap(path, normals, 0.03, 0.0055, { mat: 'uniform' });
+  placket.skinBy((p) => torsoWeights(p.y));
+  poly.add(placket);
+  return poly;
+}
+
+// ---------------------------------------------------------------------------
+// Collar: big fold-down tunic collar with pointed tips lying on the chest
+// ---------------------------------------------------------------------------
+
+const D2R = Math.PI / 180;
+
+export function buildCollar() {
+  const out = new Poly('uniform');
+  const onSurface = (deg, y, lift) => {
+    const { p, n } = torsoSurface(deg * D2R, y);
+    return p.addScaledVector(n, lift);
+  };
+  const aroundNeck = (deg, y, r) => new THREE.Vector3(Math.sin(deg * D2R) * r, y, Math.cos(deg * D2R) * r - 0.006);
+  // left half, from the back centre round to the front tip
+  const inner = [
+    aroundNeck(180, 1.418, 0.09),
+    aroundNeck(135, 1.416, 0.091),
+    aroundNeck(90, 1.407, 0.093),
+    aroundNeck(58, 1.39, 0.096),
+    onSurface(30, 1.352, 0.018),
+    onSurface(6, 1.297, 0.017),
+  ];
+  const outer = [
+    onSurface(180, 1.352, 0.017),
+    onSurface(135, 1.35, 0.017),
+    onSurface(90, 1.336, 0.017),
+    onSurface(56, 1.316, 0.019),
+    onSurface(37, 1.258, 0.022),
+    onSurface(28, 1.208, 0.026),
+  ];
+  const outward = (p) => new THREE.Vector3(p.x, 0, p.z + 0.01).normalize().add(new THREE.Vector3(0, 0.8, 0)).normalize();
+  for (const mirror of [false, true]) {
+    const A = inner.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
+    const B = outer.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
+    const leaf = thickSheet(A, B, 0.014, outward, { mat: 'uniform' });
+    leaf.jitter(0.0018, mirror ? 5 : 6);
+    out.add(leaf);
+  }
+  // collar stand hugging the neck (open at the front)
+  const arc = (y, r, yLift) => {
+    const pts = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = THREE.MathUtils.degToRad(44 + (272 * i) / 10);
+      const back = Math.max(0, -Math.cos(t));
+      pts.push(new THREE.Vector3(Math.sin(t) * r, y + yLift * back, Math.cos(t) * r - 0.006));
+    }
+    return pts;
+  };
+  const stand = thickSheet(arc(1.35, 0.087, 0.02), arc(1.404, 0.084, 0.012), 0.012, (p) => new THREE.Vector3(p.x, 0, p.z).normalize(), {
+    mat: 'uniform',
+  });
+  out.add(stand);
+  out.bone('Chest');
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Head, hair, neck
+// ---------------------------------------------------------------------------
+
+export const HEAD_CENTER = new THREE.Vector3(0, 1.528, 0.012);
+
+// yRel, rx, rz front, rz back, cz
+const HEAD_RINGS = [
+  [-0.152, 0.034, 0.024, 0.02, 0.09],
+  [-0.124, 0.094, 0.114, 0.052, 0.0],
+  [-0.072, 0.126, 0.128, 0.098, 0.0],
+  [-0.02, 0.136, 0.132, 0.128, 0.0],
+  [0.04, 0.138, 0.129, 0.14, 0.0],
+  [0.1, 0.13, 0.119, 0.138, 0.0],
+  [0.145, 0.101, 0.091, 0.11, -0.004],
+];
+
+function hairline(theta) {
+  const a = Math.abs(Math.atan2(Math.sin(theta), Math.cos(theta)));
+  const pts = [
+    [0, 0.125],
+    [0.7, 0.115],
+    [1.57, 0.035],
+    [2.45, -0.045],
+    [Math.PI, -0.078],
+  ];
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (a <= pts[i + 1][0]) {
+      const t = (a - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
+      return lerp(pts[i][1], pts[i + 1][1], t);
+    }
+  }
+  return pts[pts.length - 1][1];
+}
+
+/** Head surface point helper used by the chin strap. theta 0 = face. */
+export function headPoint(theta, yRel, offset = 0) {
+  let k = 0;
+  while (k < HEAD_RINGS.length - 2 && yRel > HEAD_RINGS[k + 1][0]) k++;
+  const A = HEAD_RINGS[k],
+    B = HEAD_RINGS[k + 1];
+  const t = clamp((yRel - A[0]) / (B[0] - A[0]), 0, 1);
+  const r = A.map((v, i) => lerp(v, B[i], t));
+  const s = Math.sin(theta),
+    c = Math.cos(theta);
+  const rr = 1 + offset / Math.max(0.05, Math.hypot(s * r[1], c * (c >= 0 ? r[2] : r[3])));
+  return new THREE.Vector3(s * r[1] * rr, yRel, r[4] + c * (c >= 0 ? r[2] : r[3]) * rr).add(HEAD_CENTER);
+}
+
+export function buildHead() {
+  const N = 10;
+  const rings = HEAD_RINGS.map(([y, rx, rzf, rzb, cz]) =>
+    ellipseRing({ n: N, rx, rz: rzf, rzBack: rzb, y: HEAD_CENTER.y + y, cz: HEAD_CENTER.z + cz }),
+  );
+  const top = new THREE.Vector3(0, HEAD_CENTER.y + 0.17, HEAD_CENTER.z - 0.006);
+  const head = loft(rings, { mat: 'skin', start: 'flat', end: top });
+  // hair: faces above the hairline, slightly puffed out
+  const rel = new THREE.Vector3();
+  const isHair = (p, margin = 0) => {
+    rel.subVectors(p, HEAD_CENTER);
+    const th = Math.atan2(rel.x, rel.z);
+    return rel.y > hairline(th) + margin;
+  };
+  const c = new THREE.Vector3();
+  for (const f of head.faces) {
+    head.faceCenter(f.ids, c);
+    if (isHair(c)) f.mat = 'hair';
+  }
+  head.warp((p) => {
+    rel.subVectors(p, HEAD_CENTER);
+    if (isHair(p, 0.012)) p.copy(HEAD_CENTER).addScaledVector(rel, 1.055);
+  });
+  head.jitter(0.0025, 3, [1, 1, 0.6]);
+
+  // nose: small faceted wedge
+  const nose = new Poly('skin');
+  const o = (x, y, z) => nose.v(x, HEAD_CENTER.y + y, HEAD_CENTER.z + z);
+  const nt = o(0, -0.03, 0.127);
+  const tip = o(0, -0.094, 0.154);
+  const wl = o(0.023, -0.1, 0.118);
+  const wr = o(-0.023, -0.1, 0.118);
+  const un = o(0, -0.109, 0.126);
+  const back = new THREE.Vector3(0, HEAD_CENTER.y - 0.07, HEAD_CENTER.z + 0.08);
+  nose.f([nt, wl, tip]).f([nt, tip, wr]).f([wl, un, tip]).f([tip, un, wr]).f([nt, wr, un, wl]);
+  nose.orientFrom(back);
+  head.add(nose);
+  head.bone('Head');
+  return head;
+}
+
+export function buildNeck() {
+  const neck = axisTube(
+    [
+      [1.28, 0.061, 0.058, 0, -0.006],
+      [1.35, 0.064, 0.061, 0, -0.008],
+      [1.425, 0.06, 0.058, 0, -0.004],
+      [1.46, 0.045, 0.045, 0, 0],
+    ],
+    { n: 8, mat: 'skin' },
+  );
+  neck.skinBy((p) => {
+    if (p.y < 1.33) return [['Chest', 1]];
+    if (p.y < 1.4) return [['Neck', 1]];
+    return [['Head', 1]];
+  });
+  return neck;
+}
+
+// ---------------------------------------------------------------------------
+// Arms and hands (built for the left side, mirrored for the right)
+// ---------------------------------------------------------------------------
+
+function sideify(poly, side) {
+  if (side === 'Right') poly.mirrorX();
+  return poly;
+}
+
+export function buildUpperArm(side) {
+  // The sleeve starts inside the jacket and its top rings are skinned to the
+  // shoulder (clavicle) bone, blending into the arm bone: when the arm hangs
+  // down the shoulder deforms as one sloped surface instead of a ball cap.
+  const p = axisTube(
+    [
+      [-0.09, 0.07, 0.072],
+      [-0.05, 0.078, 0.078],
+      [-0.012, 0.083, 0.081],
+      [0.035, 0.085, 0.083],
+      [0.09, 0.083, 0.081],
+      [0.17, 0.079, 0.077],
+      [0.27, 0.074, 0.072],
+      [0.345, 0.07, 0.068],
+      [0.38, 0.058, 0.057],
+      [0.405],
+    ],
+    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
+  );
+  p.jitter(0.004, 21);
+  p.skinBy((q) => {
+    const t = smooth(clamp((q.y + 0.065) / 0.15, 0, 1));
+    if (t <= 0) return [[`${side}Shoulder`, 1]];
+    if (t >= 1) return [[`${side}UpperArm`, 1]];
+    return [
+      [`${side}Shoulder`, 1 - t],
+      [`${side}UpperArm`, t],
+    ];
+  });
+  p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX, DIM.shoulderY, 0);
+  return sideify(p, side);
+}
+
+export function buildForearm(side) {
+  const p = axisTube(
+    [
+      [-0.062],
+      [-0.04, 0.054, 0.052],
+      [0.0, 0.068, 0.066],
+      [0.11, 0.066, 0.064],
+      [0.222, 0.062, 0.06],
+      [0.232, 0.067, 0.065],
+      [0.29, 0.066, 0.064],
+      [0.296, 0.051, 0.049],
+      [0.265, 0.045, 0.043],
+    ],
+    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
+  );
+  p.jitter(0.0035, 22, [1, 1, 1], (q) => q.y < 0.288);
+  p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX + DIM.upperArm, DIM.shoulderY, 0);
+  return sideify(p, side).bone(`${side}LowerArm`);
+}
+
+function boxAlong(len, thick, width, chamfer, from, dir, up, mat) {
+  const b = chamferBox(len, thick, width, chamfer, { mat });
+  b.translate(len / 2, 0, 0);
+  const q = quatFromAxes(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), dir, up);
+  b.apply(new THREE.Matrix4().makeRotationFromQuaternion(q));
+  b.translate(from.x, from.y, from.z);
+  return b;
+}
+
+export function buildHand(side) {
+  const hand = new Poly('skin');
+  const W = DIM.shoulderX + DIM.upperArm + DIM.lowerArm;
+  const Y = DIM.shoulderY;
+  const wrist = axisTube(
+    [
+      [-0.055, 0.032, 0.037],
+      [0.02, 0.034, 0.039],
+    ],
+    { n: 6, mat: 'skin', phase: Math.PI / 6 },
+  );
+  wrist.rotateZ(-Math.PI / 2).translate(W, Y, 0).bone('Hand');
+  hand.add(wrist);
+
+  const palm = chamferBox(0.106, 0.052, 0.104, 0.013, { mat: 'skin' });
+  palm.warp((p) => {
+    // slightly thicker at the heel of the hand, domed back
+    if (p.y > 0) p.y += 0.004 * (1 - Math.abs(p.z) / 0.05);
+    if (p.x < 0) p.y -= 0.003;
+  });
+  palm.translate(W + 0.05, Y, 0).bone('Hand');
+  hand.add(palm);
+
+  const fingerZ = [0.0381, 0.0127, -0.0127, -0.0381];
+  const fingerLen = [0.96, 1.0, 0.96, 0.84];
+  const X = new THREE.Vector3(1, 0, 0);
+  const UP = new THREE.Vector3(0, 1, 0);
+  fingerZ.forEach((z, k) => {
+    const sc = fingerLen[k];
+    const base = new THREE.Vector3(W + DIM.palm - 0.006, Y - 0.004, z);
+    const prox = boxAlong(0.054 * sc + 0.006, 0.029, 0.0236, 0.006, base, X, UP, 'skin');
+    prox.bone('Fingers1');
+    const mid = new THREE.Vector3(W + DIM.palm + DIM.finger1 - 0.004, Y - 0.004, z);
+    const dist = boxAlong(0.046 * sc + 0.004, 0.027, 0.0226, 0.006, mid, X, UP, 'skin');
+    dist.bone('Fingers2');
+    hand.add(prox);
+    hand.add(dist);
+  });
+
+  const t1 = new THREE.Vector3(W + 0.024, Y - 0.013, 0.04);
+  const t2 = new THREE.Vector3(W + 0.056, Y - 0.017, 0.073);
+  const dir = t2.clone().sub(t1).normalize();
+  const thumb1 = boxAlong(0.055, 0.032, 0.034, 0.007, t1.clone().addScaledVector(dir, -0.012), dir, UP, 'skin').bone('Thumb1');
+  const thumb2 = boxAlong(0.045, 0.029, 0.031, 0.0065, t2.clone().addScaledVector(dir, -0.004), dir, UP, 'skin').bone('Thumb2');
+  hand.add(thumb1);
+  hand.add(thumb2);
+  hand.jitter(0.0012, 7);
+  if (side === 'Right') hand.mirrorX();
+  // prefix bone names with side
+  hand.skin = hand.skin.map((s) => s.map(([b, w]) => [`${side}${b}`, w]));
+  return hand;
+}
+
+// ---------------------------------------------------------------------------
+// Trousers
+// ---------------------------------------------------------------------------
+
+export function buildThigh(side) {
+  const p = axisTube(
+    [
+      [-0.11],
+      [-0.07, 0.104, 0.11],
+      [0.0, 0.128, 0.138],
+      [0.1, 0.133, 0.141],
+      [0.22, 0.13, 0.136],
+      [0.33, 0.125, 0.13],
+      [0.368, 0.11, 0.111],
+      [0.396],
+    ],
+    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
+  );
+  p.jitter(0.0055, 31);
+  p.rotateZ(Math.PI).translate(DIM.hipX, DIM.hipY, 0);
+  return sideify(p, side).bone(`${side}UpperLeg`);
+}
+
+export function buildShin(side) {
+  const p = axisTube(
+    [
+      [-0.064],
+      [-0.036, 0.112, 0.113],
+      [0.0, 0.129, 0.131],
+      [0.1, 0.128, 0.13],
+      [0.15, 0.134, 0.137],
+      [0.18, 0.133, 0.135],
+      [0.196, 0.1, 0.106],
+    ],
+    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
+  );
+  p.jitter(0.0055, 32);
+  p.rotateZ(Math.PI).translate(DIM.hipX, DIM.kneeY, 0);
+  return sideify(p, side).bone(`${side}LowerLeg`);
+}
+
+export function buildBody() {
+  const parts = [buildTorso(), buildCollar(), buildHead(), buildNeck()];
+  for (const side of ['Left', 'Right']) {
+    parts.push(buildUpperArm(side), buildForearm(side), buildHand(side), buildThigh(side), buildShin(side));
+  }
+  return parts;
+}
