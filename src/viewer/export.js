@@ -13,7 +13,7 @@ export async function exportGLB(soldier, { clips = [], allVariants = false } = {
       obj.visible = true;
     }
   }
-  // the weapon socket is hidden in T-pose; make sure it exports
+  // the weapon socket is hidden in the bind pose; make sure it exports
   const sockVis = soldier.weaponSocket.visible;
   soldier.weaponSocket.visible = true;
   soldier.group.updateMatrixWorld(true);

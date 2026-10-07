@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { Rig } from './rig.js';
 import { buildGeometry } from './lowpoly.js';
-import { SLOT_ORDER, PRESETS, createMaterials } from './palette.js';
+import { SLOT_ORDER, PRESETS, createMaterials, updateDerived } from './palette.js';
 import { buildBody } from './parts/body.js';
 import { HEADGEAR } from './parts/headgear.js';
 import { FOOTWEAR } from './parts/footwear.js';
@@ -115,6 +115,7 @@ export class Soldier {
   setColor(slot, hex) {
     this.colors[slot] = hex;
     this.materials[slot].color.set(hex);
+    updateDerived(this.materials);
   }
 
   setColors(colors) {

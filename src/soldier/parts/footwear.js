@@ -37,7 +37,7 @@ function soleSection(z, w, yb, yt) {
   ];
 }
 
-function bootFoot(side, { shaftTop = 0.292, shaftR = [0.074, 0.083], gaiter = false } = {}) {
+function bootFoot(side, { shaftTop = 0.335, shaftR = [0.074, 0.083], gaiter = false } = {}) {
   const boot = new Poly('leather');
   // upper
   const sections = [
@@ -85,7 +85,7 @@ function bootFoot(side, { shaftTop = 0.292, shaftR = [0.074, 0.083], gaiter = fa
   boot.add(shaft);
   if (gaiter) {
     // buckled straps on the canvas gaiter
-    for (const y of [0.15, 0.235]) {
+    for (const y of [0.17, 0.27]) {
       const band = axisTube(
         [
           [y - 0.012, shaftR[0] + 0.004, shaftR[1] + 0.004],
@@ -111,8 +111,8 @@ export function buildBoots() {
 
 export function buildGaiterBoots() {
   const p = new Poly('leather');
-  p.add(bootFoot('Left', { gaiter: true, shaftTop: 0.3, shaftR: [0.08, 0.088] }));
-  p.add(bootFoot('Right', { gaiter: true, shaftTop: 0.3, shaftR: [0.08, 0.088] }));
+  p.add(bootFoot('Left', { gaiter: true, shaftTop: 0.34, shaftR: [0.08, 0.088] }));
+  p.add(bootFoot('Right', { gaiter: true, shaftTop: 0.34, shaftR: [0.08, 0.088] }));
   return p;
 }
 
@@ -121,6 +121,6 @@ export const FOOTWEAR = {
   gaiters: {
     label: 'Boots + gaiters',
     build: buildGaiterBoots,
-    display: () => bootFoot('Left', { gaiter: true, shaftTop: 0.3, shaftR: [0.08, 0.088] }),
+    display: () => bootFoot('Left', { gaiter: true, shaftTop: 0.34, shaftR: [0.08, 0.088] }),
   },
 };

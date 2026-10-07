@@ -542,7 +542,7 @@ export function thickSheet(rowA, rowB, thickness, outward, { mat = 'uniform', cl
   return poly;
 }
 
-/** Build a tube along an axis from rings [[s, r1, r2], ...] (r1/r2 radii). */
+/** Build a tube along an axis from rings [[s, r1, r2, ox, oz, twist], ...] (r1/r2 radii). */
 export function axisTube(rings, { n = 8, mat = 'uniform', start = 'flat', end = 'flat', phase = 0, power = 2 } = {}) {
   const pts = [];
   let s0 = null,
@@ -550,7 +550,8 @@ export function axisTube(rings, { n = 8, mat = 'uniform', start = 'flat', end = 
   const list = rings.slice();
   if (list[0].length === 1) s0 = list.shift()[0];
   if (list[list.length - 1].length === 1) s1 = list.pop()[0];
-  for (const [s, r1, r2 = r1, ox = 0, oz = 0] of list) pts.push(ellipseRing({ n, rx: r1, rz: r2, y: s, cx: ox, cz: oz, phase, power }));
+  // optional 6th value: per-ring twist (radians), used for diagonal cloth folds
+  for (const [s, r1, r2 = r1, ox = 0, oz = 0, tw = 0] of list) pts.push(ellipseRing({ n, rx: r1, rz: r2, y: s, cx: ox, cz: oz, phase: phase + tw, power }));
   const avg = (ring) => ring.reduce((acc, p) => acc.add(p), new THREE.Vector3()).multiplyScalar(1 / ring.length);
   const st = s0 != null ? avg(pts[0]).setY(s0) : start;
   const en = s1 != null ? avg(pts[pts.length - 1]).setY(s1) : end;

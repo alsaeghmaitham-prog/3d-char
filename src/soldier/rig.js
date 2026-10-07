@@ -1,4 +1,7 @@
-// Humanoid skeleton (T-pose bind, identity bone rotations) + posing helpers.
+// Humanoid skeleton + posing helpers. The bind pose is an A-pose: arms hang
+// 45 degrees below horizontal (less shoulder deformation than a T-pose, and
+// standard for game characters). Every other bone has an identity bind
+// rotation, so the arm chain is authored along local +X and rotated as a unit.
 //
 // Bone names follow the common humanoid convention (Hips, Spine, Chest, Neck,
 // Head, LeftShoulder, LeftUpperArm, LeftLowerArm, LeftHand, LeftUpperLeg,
@@ -8,7 +11,7 @@ import * as THREE from 'three';
 
 export const DIM = {
   shoulderX: 0.25,
-  shoulderY: 1.29,
+  shoulderY: 1.31,
   upperArm: 0.345,
   lowerArm: 0.3,
   palm: 0.1,
@@ -17,7 +20,28 @@ export const DIM = {
   hipY: 0.8,
   kneeY: 0.47,
   ankleY: 0.115,
+  armDrop: 45, // A-pose: degrees below horizontal
 };
+
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+
+/** Bind rotation of the upper arm (left arm drops by -armDrop about Z). */
+export function armBindQuat(side) {
+  const s = side === 'Left' ? -1 : 1;
+  return new THREE.Quaternion().setFromAxisAngle(Z_AXIS, (s * DIM.armDrop * Math.PI) / 180);
+}
+
+/**
+ * Matrix taking arm geometry authored straight out along +X (left side,
+ * T-pose layout) into the A-pose bind: a rotation about the shoulder joint.
+ */
+export function armBindMatrix(side = 'Left') {
+  const j = new THREE.Vector3(side === 'Left' ? DIM.shoulderX : -DIM.shoulderX, DIM.shoulderY, 0);
+  return new THREE.Matrix4()
+    .makeTranslation(j.x, j.y, j.z)
+    .multiply(new THREE.Matrix4().makeRotationFromQuaternion(armBindQuat(side)))
+    .multiply(new THREE.Matrix4().makeTranslation(-j.x, -j.y, -j.z));
+}
 
 export function boneDefs() {
   const d = DIM;
@@ -27,7 +51,7 @@ export function boneDefs() {
     ['Spine', 'Hips', [0, 0.98, 0]],
     ['Chest', 'Spine', [0, 1.12, 0]],
     ['Neck', 'Chest', [0, 1.335, -0.01]],
-    ['Head', 'Neck', [0, 1.42, 0]],
+    ['Head', 'Neck', [0, 1.435, 0]],
   ];
   for (const [side, s] of [
     ['Left', 1],
@@ -38,7 +62,7 @@ export function boneDefs() {
     const wx = ex + d.lowerArm * s;
     const kx = wx + d.palm * s;
     defs.push(
-      [`${side}Shoulder`, 'Chest', [0.055 * s, 1.29, -0.01]],
+      [`${side}Shoulder`, 'Chest', [0.055 * s, d.shoulderY, -0.01]],
       [`${side}UpperArm`, `${side}Shoulder`, [sx, d.shoulderY, 0]],
       [`${side}LowerArm`, `${side}UpperArm`, [ex, d.shoulderY, 0]],
       [`${side}Hand`, `${side}LowerArm`, [wx, d.shoulderY, 0]],
@@ -99,10 +123,15 @@ export class Rig {
         b.position.copy(w).sub(this.bindWorld[parent]);
       } else b.position.copy(w);
       b.userData.bindPosition = b.position.clone();
+      b.userData.bindQuaternion = new THREE.Quaternion();
       this.bones.push(b);
       this.byName[name] = b;
     }
+    this.byName.LeftUpperArm.userData.bindQuaternion = armBindQuat('Left');
+    this.byName.RightUpperArm.userData.bindQuaternion = armBindQuat('Right');
     this.root = this.byName.Root;
+    this.resetPose();
+    for (const b of this.bones) this.bindWorld[b.name] = b.getWorldPosition(new THREE.Vector3());
     this.boneIndex = {};
     this.bones.forEach((b, i) => (this.boneIndex[b.name] = i));
     this.skeleton = null;
@@ -114,11 +143,11 @@ export class Rig {
     return b;
   }
 
-  /** Put every bone back to the T-pose bind configuration. */
+  /** Put every bone back to the A-pose bind configuration. */
   resetPose() {
     for (const b of this.bones) {
       b.position.copy(b.userData.bindPosition);
-      b.quaternion.identity();
+      b.quaternion.copy(b.userData.bindQuaternion);
       b.scale.set(1, 1, 1);
     }
     this.root.updateMatrixWorld(true);

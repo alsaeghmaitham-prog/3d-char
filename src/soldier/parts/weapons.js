@@ -182,13 +182,18 @@ export function buildSMG() {
   return g;
 }
 
-// Grips shared by the rifle and the carbine.
+// Grips shared by the rifle and the carbine. `wrap` describes the stock's
+// wrist for poses that fit the fist around it (centre line, the direction the
+// thumb side of the fist faces, radius); the fixed point/normal/fingers grip
+// is used when shouldering the rifle.
 const RIFLE_GRIPS = {
   right: {
     point: V(-0.0235, -0.03, 0.004),
     normal: V(1, 0, 0),
     fingers: V(0, -0.78, 0.62),
     curl: { f1: 82, f2: 78, t1: [-10, 10, 20], t2: 30 },
+    wrap: { center: V(0, -0.056, -0.022), thumb: V(0, -0.37, -0.93), radius: 0.027 },
+    wrapCurl: { f1: 88, f2: 84, t1: [0, 46, -20], t2: -20 },
   },
   left: {
     point: V(0.002, -0.054, 0.21),

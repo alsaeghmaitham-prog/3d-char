@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Poly, lathe, strap, axisTube, thickSheet } from '../lowpoly.js';
 import { HEAD_CENTER, headPoint } from './body.js';
 
-const BRIM_Y = 1.566;
+const BRIM_Y = 1.581;
 
 function placeOnHead(poly, tiltDeg = 3, y = BRIM_Y, z = 0.002) {
   poly.rotateX(THREE.MathUtils.degToRad(tiltDeg));
@@ -31,21 +31,21 @@ function chinStrap(fromY = 0.03, theta = 1.42) {
 /** Faceted kettle/brodie style helmet with wide sloped brim (reference). */
 export function buildBrodieHelmet({ strap = true } = {}) {
   const profile = [
-    [0.0, 0.238],
-    [0.084, 0.214],
-    [0.128, 0.148],
-    [0.153, 0.062],
+    [0.0, 0.195],
+    [0.084, 0.175],
+    [0.128, 0.121],
+    [0.153, 0.051],
     [0.159, 0.002],
-    [0.17, -0.012],
-    [0.244, -0.026],
-    [0.249, -0.009],
+    [0.17, -0.01],
+    [0.222, -0.021],
+    [0.226, -0.006],
     [0.178, 0.003],
     [0.172, 0.006],
-    [0.166, 0.07],
-    [0.139, 0.142],
-    [0.088, 0.208],
-    [0.034, 0.25],
-    [0.0, 0.264],
+    [0.166, 0.057],
+    [0.139, 0.116],
+    [0.088, 0.171],
+    [0.034, 0.205],
+    [0.0, 0.217],
   ];
   const shell = lathe(profile, 10, { mat: 'olive', phase: 0 });
   // irregular facets: jitter outer dome & brim a little, keep inside tidy
@@ -85,7 +85,7 @@ export function buildPotHelmet({ strap = true } = {}) {
     // brim lower at the back, slightly raised at the front
     if (p.y < 0.0) p.y -= Math.max(0, -p.z) * 0.12;
   });
-  placeOnHead(shell, -2, 1.535, -0.008);
+  placeOnHead(shell, -2, 1.55, -0.008);
   const helmet = new Poly('olive');
   helmet.add(shell);
   if (strap) helmet.add(chinStrap(0.0, 1.45));
@@ -130,7 +130,7 @@ export function buildFieldCap() {
   }
   const peak = thickSheet(peakA, peakB, 0.007, () => new THREE.Vector3(0, 1, 0.3), { mat: 'olive' });
   cap.add(peak);
-  placeOnHead(cap, 4, 1.548, 0.0);
+  placeOnHead(cap, 4, 1.563, 0.0);
   return cap.bone('Head');
 }
 

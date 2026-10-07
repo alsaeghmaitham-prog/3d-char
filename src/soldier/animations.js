@@ -1,7 +1,9 @@
 // Animation clips sampled from the procedural pose solver. Each clip is a
-// regular THREE.AnimationClip with one quaternion track per bone plus the
-// hip translation, so it plays in the viewer through an AnimationMixer and
-// exports into the GLB unchanged (Unity / Unreal / Godot read them as-is).
+// regular THREE.AnimationClip with one quaternion track per bone, the hip
+// translation and the weapon socket (the hand holds the rifle differently at
+// the ready and when aiming), so it plays in the viewer through an
+// AnimationMixer and exports into the GLB unchanged (Unity / Unreal / Godot
+// read them as-is).
 import * as THREE from 'three';
 import { applyPose, POSES } from './poses.js';
 
@@ -16,6 +18,10 @@ function sampleClip(soldier, name, duration, poseId, optsAt) {
   const quats = rig.bones.map(() => []);
   const prev = rig.bones.map(() => null);
   const hips = [];
+  const sock = soldier.weaponSocket;
+  const sockPos = [];
+  const sockQuat = [];
+  let sockPrev = null;
   for (let f = 0; f <= frames; f++) {
     const t = (f / frames) * duration;
     applyPose(soldier, poseId, optsAt ? optsAt(f / frames) : {});
@@ -27,9 +33,18 @@ function sampleClip(soldier, name, duration, poseId, optsAt) {
       quats[i].push(q.x, q.y, q.z, q.w);
     });
     hips.push(...rig.bone('Hips').position.toArray());
+    const sq = sock.quaternion.clone();
+    if (sockPrev && sockPrev.dot(sq) < 0) sq.set(-sq.x, -sq.y, -sq.z, -sq.w);
+    sockPrev = sq;
+    sockPos.push(...sock.position.toArray());
+    sockQuat.push(sq.x, sq.y, sq.z, sq.w);
   }
   const tracks = [new THREE.VectorKeyframeTrack('Hips.position', times, hips)];
   rig.bones.forEach((b, i) => tracks.push(new THREE.QuaternionKeyframeTrack(`${b.name}.quaternion`, times, quats[i])));
+  tracks.push(
+    new THREE.VectorKeyframeTrack(`${sock.name}.position`, times, sockPos),
+    new THREE.QuaternionKeyframeTrack(`${sock.name}.quaternion`, times, sockQuat),
+  );
   const clip = new THREE.AnimationClip(name, duration, tracks);
   clip.optimize();
   return clip;
@@ -113,7 +128,7 @@ export const ANIMATIONS = [
   { id: 'idle', label: 'Idle', hint: 'Breathing loop' },
   { id: 'walk', label: 'Walk', hint: 'In-place, 1 s cycle' },
   { id: 'aim', label: 'Aim', hint: 'Shouldered' },
-  { id: 'tpose', label: 'T-pose', hint: 'Bind pose' },
+  { id: 'bind', label: 'A-pose', hint: 'Bind pose' },
 ];
 
 /** Build every clip for the soldier's current loadout (weapon grips matter). */
@@ -124,7 +139,7 @@ export function buildClips(soldier) {
     idle: idle(soldier),
     walk: walk(soldier),
     aim: aim(soldier),
-    tpose: sampleClip(soldier, 'TPose', 1, 'tpose'),
+    bind: sampleClip(soldier, 'APose', 1, 'bind'),
   };
   soldier.pose = keep;
   soldier.updatePose();

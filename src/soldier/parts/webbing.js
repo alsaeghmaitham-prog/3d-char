@@ -1,11 +1,11 @@
 // Belt, pouches, harness straps, packs. Rigid on Hips / Chest, straps follow
 // the jacket surface.
 import * as THREE from 'three';
-import { Poly, chamferBox, extrudeProfile, strap, thickSheet, axisTube, lathe, loft, ellipseRing, raycastPoly } from '../lowpoly.js';
-import { torsoPoint, torsoNormal, torsoWeights, torsoBackZ, torsoMesh } from './body.js';
+import { Poly, chamferBox, extrudeProfile, strap, thickSheet, axisTube, lathe, loft, ellipseRing, raycastPoly, smooth, clamp } from '../lowpoly.js';
+import { torsoPoint, torsoNormal, torsoWeights, torsoBackZ, torsoMesh, jacketWeights, buildSleeve } from './body.js';
 
-const BELT_LOW = 0.852;
-const BELT_HIGH = 0.903;
+const BELT_LOW = 0.885;
+const BELT_HIGH = 0.935;
 const BELT_OFF = 0.013;
 
 function frameAt(theta, y, offset) {
@@ -155,38 +155,45 @@ export function buildPlainBelt() {
 // ---------------------------------------------------------------------------
 
 function braceSide(s) {
-  const torso = torsoMesh();
+  const side = s > 0 ? 'Left' : 'Right';
+  // the brace lies on whatever is outermost: jacket or the top of the sleeve
+  const targets = [torsoMesh(), buildSleeve(side)];
   const path = [];
   const normals = [];
-  const hit = (origin, dir, lift = 0.0025) => {
-    const h = raycastPoly(torso, origin, dir);
-    if (!h) return;
-    path.push(h.point.addScaledVector(h.normal, lift));
-    normals.push(h.normal);
+  const hit = (origin, dir, lift = 0.003) => {
+    const from = origin.clone().addScaledVector(dir, 0.6);
+    const back = dir.clone().negate();
+    let best = null;
+    for (const t of targets) {
+      const h = raycastPoly(t, from, back);
+      if (h && (!best || h.t < best.t)) best = h;
+    }
+    if (!best) return;
+    path.push(best.point.addScaledVector(best.normal, lift));
+    normals.push(best.normal);
   };
-  const xf = 0.17 * s;
-  const xb = 0.14 * s;
-  const xt = 0.148 * s;
-  // up the chest
-  for (const y of [BELT_HIGH - 0.012, 0.96, 1.06, 1.16, 1.24, 1.29]) hit(new THREE.Vector3(xf, y, 0), new THREE.Vector3(0, 0, 1));
-  // over the shoulder: fan of rays in the sagittal plane, lifted clear of the collar
-  for (let i = 1; i <= 9; i++) {
-    const u = i / 10;
+  // straight down the chest, converging slightly towards the belt
+  const xAt = (y) => s * (0.135 + 0.045 * smooth(clamp((y - 0.93) / 0.37, 0, 1)));
+  const xb = 0.15 * s;
+  for (const y of [BELT_HIGH - 0.012, 1.0, 1.08, 1.16, 1.24, 1.3]) hit(new THREE.Vector3(xAt(y), y, 0), new THREE.Vector3(0, 0, 1));
+  // over the shoulder: fan of rays from inside the shoulder, front to back
+  const xf = xAt(1.3);
+  for (let i = 1; i <= 11; i++) {
+    const u = i / 12;
     const psi = u * Math.PI;
-    const x = u < 0.5 ? xf + (xt - xf) * (u / 0.5) : xt + (xb - xt) * ((u - 0.5) / 0.5);
-    hit(new THREE.Vector3(x, 1.24, -0.004), new THREE.Vector3(0, Math.sin(psi), Math.cos(psi)), 0.0025 + 0.019 * Math.pow(Math.sin(psi), 0.7));
+    hit(new THREE.Vector3(xf + (xb - xf) * smooth(u), 1.27, -0.005), new THREE.Vector3(0, Math.sin(psi), Math.cos(psi)));
   }
-  // down the back
-  for (const y of [1.29, 1.2, 1.1, 1.0, BELT_HIGH - 0.012]) hit(new THREE.Vector3(xb, y, 0), new THREE.Vector3(0, 0, -1));
-  const st = strap(path, normals, 0.052, 0.0085, { mat: 'webbing' });
-  st.skinBy((p) => (p.y > 1.3 ? [['Chest', 1]] : torsoWeights(p.y)));
+  // down the back, behind the pack to the belt
+  for (const y of [1.3, 1.22, 1.12, 1.02, BELT_HIGH - 0.012]) hit(new THREE.Vector3(xb, y, 0), new THREE.Vector3(0, 0, -1));
+  const st = strap(path, normals, 0.05, 0.011, { mat: 'webbing' });
+  st.skinBy(jacketWeights);
   // brace attachment buckle at the belt (front)
-  const buckle = chamferBox(0.04, 0.03, 0.01, 0.002, { mat: 'metal' });
-  const b = raycastPoly(torso, new THREE.Vector3(xf, BELT_HIGH + 0.014, 0), new THREE.Vector3(0, 0, 1));
+  const buckle = chamferBox(0.042, 0.03, 0.01, 0.002, { mat: 'metal' });
+  const b = raycastPoly(targets[0], new THREE.Vector3(xAt(BELT_HIGH), BELT_HIGH + 0.014, 0), new THREE.Vector3(0, 0, 1));
   const n = b.normal;
   const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0).cross(n).normalize(), new THREE.Vector3(0, 1, 0), n);
-  m.setPosition(b.point.addScaledVector(n, 0.012));
-  buckle.apply(m).skinBy((p) => torsoWeights(p.y));
+  m.setPosition(b.point.addScaledVector(n, 0.014));
+  buckle.apply(m).skinBy(jacketWeights);
   st.add(buckle);
   return st;
 }
@@ -202,7 +209,7 @@ export function buildHarness() {
 // Packs (rigid on Chest)
 // ---------------------------------------------------------------------------
 
-const PACK = { w: 0.33, top: 1.338, bottom: 0.935, front: -0.139, depth: 0.165 };
+const PACK = { w: 0.33, top: 1.3, bottom: 0.91, front: -0.139, depth: 0.165 };
 
 function packBody({ w = PACK.w, top = PACK.top, bottom = PACK.bottom, front = PACK.front, depth = PACK.depth } = {}) {
   const h = top - bottom;
@@ -305,7 +312,7 @@ export function buildFieldPackWithSides() {
 
 export function buildRucksack() {
   const p = new Poly('webbing');
-  const big = { w: 0.36, top: 1.36, bottom: 0.9, front: -0.146, depth: 0.2 };
+  const big = { w: 0.36, top: 1.32, bottom: 0.87, front: -0.146, depth: 0.2 };
   p.add(packBody(big));
   p.add(packFlap({ w: big.w + 0.012, top: big.top, front: big.front, depth: big.depth, drop: 0.2 }));
   p.add(flapStrap(-0.08, { top: big.top, front: big.front, depth: big.depth, drop: 0.2 }));

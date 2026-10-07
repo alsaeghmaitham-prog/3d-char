@@ -18,11 +18,14 @@ export const POSES = {
     chest: [5, 0, 0],
     neck: [-5, 0, 0],
     head: [-4, 0, 0],
-    shoulders: { Left: [0, -8, 4], Right: [0, 8, -4] },
+    shoulders: { Left: [0, -3, 2], Right: [0, 3, -2] },
     feet: { Left: { pos: [0.228, 0.03], yaw: 9 }, Right: { pos: [-0.228, -0.012], yaw: -11 } },
     knees: { Left: [0.3, 0, 1], Right: [-0.3, 0, 1] },
-    weapon: { origin: [-0.04, 0.99, 0.31], dir: [0.683, -0.631, 0.368], roll: 40 },
-    elbows: { Left: [1, -0.3, -0.4], Right: [-1, -0.2, -0.3] },
+    weapon: { origin: [-0.04, 0.99, 0.285], dir: [0.683, -0.631, 0.368], roll: 40 },
+    elbows: { Left: [0.6, -0.3, -0.75], Right: [-0.8, -0.4, -0.5] },
+    // right fist wraps the wrist of the stock in line with the forearm, thumb
+    // side up; k tilts the fist from "straight wrist" (0) to the stock axis (1)
+    wrap: { Right: { thumb: [0, 1, 0], k: 0.25 } },
     unarmed: { Left: [0.29, 0.72, 0.06], Right: [-0.29, 0.72, 0.06] },
   },
   aim: {
@@ -53,7 +56,7 @@ export const POSES = {
     elbows: { Left: [0.3, -0.2, -1], Right: [-0.3, -0.2, -1] },
     unarmed: { Left: [0.3, 0.73, 0.05], Right: [-0.3, 0.73, 0.05] },
   },
-  tpose: { label: 'T-pose (bind)', bind: true },
+  bind: { label: 'A-pose (bind)', bind: true },
 };
 
 /** World rotation for a hand given finger direction and palm normal. */
@@ -136,15 +139,12 @@ export function applyPose(soldier, poseId, opts = {}) {
     const sides = wp.oneHand ? ['Right'] : ['Right', 'Left'];
     for (const side of sides) {
       const g = W.grips[side.toLowerCase()];
-      const pt = g.point.clone().applyMatrix4(M);
-      const nrm = g.normal.clone().transformDirection(M);
-      const fing = g.fingers.clone().normalize().transformDirection(M);
-      const q = handQuat(side, fing, nrm);
-      const wrist = pt.sub(CONTACT[side].clone().applyQuaternion(q));
-      const ik = rig.solveTwoBone(`${side}UpperArm`, `${side}LowerArm`, `${side}Hand`, wrist, V(P.elbows[side]), side === 'Left' ? Y.clone().negate() : Y);
+      const pole = V(P.elbows[side]);
+      const wrap = P.wrap && P.wrap[side] && g.wrap ? P.wrap[side] : null;
+      const { q, ik } = wrap !== null ? wrapGrip(rig, side, M, g, pole, wrap) : fixedGrip(rig, side, M, g, pole);
       soldier.poseInfo[side] = ik.reach;
       rig.setWorldQuat(`${side}Hand`, q);
-      curlFingers(rig, side, g.curl);
+      curlFingers(rig, side, wrap !== null ? g.wrapCurl || g.curl : g.curl);
     }
     if (wp.oneHand) relaxedArm(rig, 'Left', P);
     const hand = rig.bone('RightHand');
@@ -156,6 +156,54 @@ export function applyPose(soldier, poseId, opts = {}) {
     relaxedArm(rig, 'Right', P);
   }
   rig.root.updateMatrixWorld(true);
+}
+
+function armIK(rig, side, wrist, pole) {
+  return rig.solveTwoBone(`${side}UpperArm`, `${side}LowerArm`, `${side}Hand`, wrist, pole, side === 'Left' ? Y.clone().negate() : Y);
+}
+
+/** Hand placed by the weapon's fixed grip frame (point, palm normal, fingers). */
+function fixedGrip(rig, side, M, g, pole) {
+  const pt = g.point.clone().applyMatrix4(M);
+  const nrm = g.normal.clone().transformDirection(M);
+  const fing = g.fingers.clone().normalize().transformDirection(M);
+  const q = handQuat(side, fing, nrm);
+  const ik = armIK(rig, side, pt.sub(CONTACT[side].clone().applyQuaternion(q)), pole);
+  return { q, ik };
+}
+
+/**
+ * Fist wrapped around a round part of the weapon (the wrist of a stock). The
+ * hand continues the forearm, rolled so its thumb side faces `opts.thumb`
+ * (world), then tilted by `opts.k` towards the part's own axis. Iterates
+ * because the forearm direction depends on where the hand ends up.
+ */
+function wrapGrip(rig, side, M, g, pole, opts) {
+  const w = g.wrap;
+  const C = w.center.clone().applyMatrix4(M);
+  const axis = w.thumb.clone().normalize().transformDirection(M);
+  const hint = V(opts.thumb).normalize();
+  let q = handQuat(side, g.fingers.clone().normalize().transformDirection(M), g.normal.clone().transformDirection(M));
+  const elbow = new THREE.Vector3();
+  const wristPos = new THREE.Vector3();
+  const place = () => {
+    const N = new THREE.Vector3(0, -1, 0).applyQuaternion(q);
+    const wrist = C.clone().addScaledVector(N, -w.radius).sub(CONTACT[side].clone().applyQuaternion(q));
+    return armIK(rig, side, wrist, pole);
+  };
+  for (let it = 0; it < 12; it++) {
+    place();
+    rig.worldPos(`${side}LowerArm`, elbow);
+    rig.worldPos(`${side}Hand`, wristPos);
+    const d = wristPos.sub(elbow).normalize();
+    const Z = hint.clone().addScaledVector(d, -hint.dot(d)).normalize();
+    const A = axis.clone().multiplyScalar(Math.sign(axis.dot(Z)) || 1);
+    Z.lerp(A, opts.k ?? 0).normalize();
+    const F = d.clone().addScaledVector(Z, -d.dot(Z)).normalize();
+    const N = side === 'Right' ? new THREE.Vector3().crossVectors(Z, F) : new THREE.Vector3().crossVectors(F, Z);
+    q = handQuat(side, F, N);
+  }
+  return { q, ik: place() };
 }
 
 function relaxedArm(rig, side, P) {

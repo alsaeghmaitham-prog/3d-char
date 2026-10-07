@@ -232,7 +232,7 @@ function runApp() {
       action = null;
     }
     mixer.stopAllAction();
-    if (id === 'ready' || id === 'tpose') {
+    if (id === 'ready' || id === 'bind') {
       soldier.setPose(id);
     } else {
       soldier.setPose('ready');
@@ -438,9 +438,9 @@ function runApp() {
     ['Height', '1.80 m with helmet (Y-up, metres)'],
     ['Facing', '+Z forward, glTF convention'],
     ['Skeleton', `${soldier.rig.bones.length} bones, humanoid names (Hips, Spine, Chest, LeftUpperArm…)`],
-    ['Bind pose', 'T-pose; the ready pose is stored as the default pose'],
+    ['Bind pose', 'A-pose (arms 45° down); the ready pose is stored as the default pose'],
     ['Gear', 'Each item is its own skinned mesh on the shared skeleton; weapons hang off a socket on the right hand'],
-    ['Materials', `${SLOTS.length} flat colour slots: ${SLOTS.map((s) => s.label.toLowerCase()).join(', ')}`],
+    ['Materials', `${SLOTS.length} flat colour slots: ${SLOTS.map((s) => s.label.toLowerCase()).join(', ')}; plus a darker shirt shade that follows the uniform`],
     ['Clips', ANIMATIONS.map((a) => a.label).join(', ')],
   ];
   const specEl = $('#spec');
@@ -485,7 +485,7 @@ function runApp() {
     // export in the static pose currently selected (ready pose by default)
     const playing = action;
     if (playing) playing.paused = true;
-    const pose = state.anim === 'tpose' ? 'tpose' : 'ready';
+    const pose = state.anim === 'bind' ? 'bind' : 'ready';
     soldier.setPose(pose);
     const glb = await exportGLB(soldier, { clips: Object.values(clips), allVariants: all });
     if (playing) playing.paused = false;
@@ -496,7 +496,8 @@ function runApp() {
       `${base}.glb  (binary glTF 2.0, metres, Y-up, faces +Z)`,
       '',
       'Nodes: Root/Hips/... humanoid skeleton; Body + one skinned mesh per gear item',
-      '(Head_*, Back_*, Harness_*, Belt_*, Feet_*); weapons under RightHand/WeaponSocket.',
+      '(Head_*, Back_*, Harness_*, Belt_*, Feet_*); weapons under RightHand/WeaponSocket',
+      '(the clips animate the socket: the grip differs at the ready and when aiming).',
       'Animations: ' + Object.values(clips).map((c) => c.name).join(', '),
       all ? 'Modular kit: every variant is included and visible; hide the ones you do not use.' : 'Loadout: ' + JSON.stringify(soldier.loadout),
       '',

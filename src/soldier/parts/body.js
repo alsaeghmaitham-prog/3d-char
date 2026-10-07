@@ -1,9 +1,11 @@
 // Body: head, hair, neck, jacket (torso, collar, placket), sleeves, hands and
-// trousers. Everything is authored in the T-pose bind space (metres, +Z
-// forward, +X = character's left) and bound to the humanoid rig.
+// trousers. Metres, +Z forward, +X = character's left. Arms and hands are
+// modelled straight out along X and then rotated into the rig's A-pose bind.
 import * as THREE from 'three';
-import { Poly, loft, ellipseRing, axisTube, chamferBox, thickSheet, strap, lerp, smooth, clamp } from '../lowpoly.js';
-import { DIM, quatFromAxes } from '../rig.js';
+import { Poly, loft, ellipseRing, axisTube, chamferBox, thickSheet, strap, lerp, smooth, clamp, raycastPoly } from '../lowpoly.js';
+import { DIM, quatFromAxes, armBindMatrix } from '../rig.js';
+
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 // ---------------------------------------------------------------------------
 // Torso description (shared with gear that sits on the jacket)
@@ -11,15 +13,16 @@ import { DIM, quatFromAxes } from '../rig.js';
 
 // y, half width, front depth, back depth, centre z, superellipse power
 export const TORSO = [
-  [0.69, 0.27, 0.18, 0.174, 0.0, 2.5],
-  [0.735, 0.262, 0.172, 0.167, 0.0, 2.5],
-  [0.8, 0.236, 0.158, 0.153, 0.0, 2.6],
-  [0.875, 0.205, 0.141, 0.139, 0.004, 2.7],
-  [0.96, 0.201, 0.143, 0.14, 0.008, 2.7],
+  [0.735, 0.274, 0.182, 0.176, 0.0, 2.5],
+  [0.775, 0.262, 0.172, 0.167, 0.0, 2.5],
+  [0.835, 0.232, 0.156, 0.151, 0.002, 2.6],
+  [0.9, 0.206, 0.142, 0.14, 0.005, 2.7],
+  [0.96, 0.202, 0.143, 0.14, 0.008, 2.7],
   [1.06, 0.21, 0.15, 0.144, 0.01, 2.8],
-  [1.16, 0.216, 0.155, 0.147, 0.01, 2.8],
-  [1.24, 0.216, 0.149, 0.145, 0.004, 2.8],
-  [1.31, 0.206, 0.13, 0.134, -0.002, 2.6],
+  [1.16, 0.216, 0.155, 0.147, 0.01, 2.7],
+  [1.24, 0.218, 0.152, 0.146, 0.004, 2.7],
+  [1.31, 0.218, 0.138, 0.137, -0.002, 2.5],
+  [1.355, 0.206, 0.118, 0.124, -0.004, 2.4],
 ];
 
 export function torsoParams(y) {
@@ -82,6 +85,20 @@ export function torsoWeights(y) {
   return [['Chest', 1]];
 }
 
+/**
+ * Skin weights for the jacket and anything lying on it: torsoWeights by
+ * height, with the outer shoulders shared with the clavicle bones so the
+ * jacket, sleeve tops and straps move together when the shoulders do.
+ */
+export function jacketWeights(p) {
+  const base = torsoWeights(p.y);
+  const k = 0.8 * smooth(clamp((Math.abs(p.x) - 0.12) / 0.09, 0, 1)) * smooth(clamp((p.y - 1.2) / 0.12, 0, 1));
+  if (k < 1e-3) return base;
+  const out = base.map(([b, w]) => [b, w * (1 - k)]);
+  out.push([p.x > 0 ? 'LeftShoulder' : 'RightShoulder', k]);
+  return out;
+}
+
 // Upper torso rings above the shoulder line, as functions of theta.
 function superPoint(theta, a, bf, bb, cz, pw, y) {
   const sn = Math.sin(theta);
@@ -90,9 +107,9 @@ function superPoint(theta, a, bf, bb, cz, pw, y) {
   return new THREE.Vector3(Math.sign(sn) * Math.pow(Math.abs(sn), e) * a, y, cz + Math.sign(c) * Math.pow(Math.abs(c), e) * (c >= 0 ? bf : bb));
 }
 const TOP_RINGS = [
-  // trapezius: higher at the sides than front/back -> hunched, high shoulders
-  (t) => superPoint(t, 0.16, 0.104, 0.112, -0.004, 2.4, 1.338 + 0.05 * Math.pow(Math.sin(t), 2)),
-  (t) => superPoint(t, 0.08, 0.074, 0.078, -0.006, 2, 1.372 + 0.012 * (1 - Math.cos(t))),
+  // trapezius: broad, nearly level shoulders, a little higher at the sides
+  (t) => superPoint(t, 0.176, 0.096, 0.106, -0.006, 2.2, 1.378 + 0.024 * Math.pow(Math.sin(t), 2)),
+  (t) => superPoint(t, 0.082, 0.074, 0.08, -0.008, 2, 1.394 + 0.014 * (1 - Math.cos(t))),
 ];
 const PROFILE = [...TORSO.map(([y, a, bf, bb, cz, pw]) => (t) => superPoint(t, a, bf, bb, cz, pw, y)), ...TOP_RINGS];
 
@@ -127,19 +144,22 @@ export function torsoMesh() {
 
 export function buildTorso() {
   const N = 12;
-  const rings = PROFILE.map((f) => {
+  // small twists between rings give diagonal cloth facets instead of a
+  // straight-sided tube (the hem, belt line and shoulders stay untwisted)
+  const TWIST = [0, 0, 0.05, 0, 0.07, -0.06, 0.05, 0, 0, 0, 0, 0];
+  const rings = PROFILE.map((f, k) => {
     const r = [];
-    for (let i = 0; i < N; i++) r.push(f((i / N) * Math.PI * 2));
+    for (let i = 0; i < N; i++) r.push(f((i / N) * Math.PI * 2 + (TWIST[k] || 0)));
     return r;
   });
   // inner lip closing the hem
-  const lip = ellipseRing({ n: N, rx: 0.236, rz: 0.156, rzBack: 0.15, y: 0.705, power: 2.5 });
+  const lip = ellipseRing({ n: N, rx: 0.238, rz: 0.158, rzBack: 0.152, y: 0.752, power: 2.5 });
   const poly = loft([lip, ...rings], { mat: 'uniform', start: 'flat', end: 'flat' });
-  poly.jitter(0.0055, 11, [1, 0.5, 1], (p) => p.y > 0.7 && p.y < 1.36);
-  poly.skinBy((p) => torsoWeights(p.y));
+  poly.jitter(0.0012, 11, [1, 0.5, 1], (p) => p.y > 0.745 && p.y < 1.37);
+  poly.skinBy(jacketWeights);
 
   // placket down the centre front
-  const ys = [0.705, 0.78, 0.86, 0.96, 1.06, 1.16, 1.24, 1.29];
+  const ys = [0.74, 0.78, 0.86, 0.96, 1.06, 1.16, 1.24, 1.32];
   const path = ys.map((y) => torsoPoint(0, y, 0.0015));
   const normals = ys.map((y) => torsoNormal(0, y));
   const placket = strap(path, normals, 0.03, 0.0055, { mat: 'uniform' });
@@ -154,53 +174,47 @@ export function buildTorso() {
 
 const D2R = Math.PI / 180;
 
+/** First hit on the bare jacket, casting from outside towards it. */
+function onJacket(origin, dir, lift) {
+  const h = raycastPoly(torsoMesh(), origin, dir);
+  return h.point.addScaledVector(h.normal, lift);
+}
+
 export function buildCollar() {
   const out = new Poly('uniform');
-  const onSurface = (deg, y, lift) => {
-    const { p, n } = torsoSurface(deg * D2R, y);
-    return p.addScaledVector(n, lift);
-  };
-  const aroundNeck = (deg, y, r) => new THREE.Vector3(Math.sin(deg * D2R) * r, y, Math.cos(deg * D2R) * r - 0.006);
-  // left half, from the back centre round to the front tip
-  const inner = [
-    aroundNeck(180, 1.418, 0.09),
-    aroundNeck(135, 1.416, 0.091),
-    aroundNeck(90, 1.407, 0.093),
-    aroundNeck(58, 1.39, 0.096),
-    onSurface(30, 1.352, 0.018),
-    onSurface(6, 1.297, 0.017),
-  ];
-  const outer = [
-    onSurface(180, 1.352, 0.017),
-    onSurface(135, 1.35, 0.017),
-    onSurface(90, 1.336, 0.017),
-    onSurface(56, 1.316, 0.019),
-    onSurface(37, 1.258, 0.022),
-    onSurface(28, 1.208, 0.026),
-  ];
-  const outward = (p) => new THREE.Vector3(p.x, 0, p.z + 0.01).normalize().add(new THREE.Vector3(0, 0.8, 0)).normalize();
+  const T = 0.013; // cloth thickness
+  const front = (x, y, lift) => onJacket(new THREE.Vector3(x, y, 0.5), new THREE.Vector3(0, 0, -1), lift);
+  const top = (x, z, lift) => onJacket(new THREE.Vector3(x, 1.8, z), new THREE.Vector3(0, -1, 0), lift);
+  const ring = (deg, y, r) => new THREE.Vector3(Math.sin(deg * D2R) * r, y, Math.cos(deg * D2R) * r - 0.008);
+  // stand: closed band round the neck, level under the jaw, higher at the back
+  const standY = (deg) => 1.4 + 0.045 * smooth(clamp((deg - 90) / 90, 0, 1));
+  const standR = (deg) => 0.084 + 0.01 * smooth(clamp((deg - 90) / 90, 0, 1));
+  const angles = [];
+  for (let i = 0; i < 16; i++) angles.push((i / 16) * 360);
+  const sd = (deg) => (deg > 180 ? 360 - deg : deg);
+  const standTop = angles.map((deg) => ring(deg, standY(sd(deg)), standR(sd(deg))));
+  const standBot = angles.map((deg) => ring(deg, torsoSurface(deg * D2R, 1.5).p.y - 0.012, standR(sd(deg)) - 0.004));
+  out.add(thickSheet(standTop, standBot, 0.008, (p) => new THREE.Vector3(p.x, 0, p.z + 0.008), { mat: 'uniform', closed: true }));
+  // fold-down leaves (left half, mirrored): fold line from the V at the
+  // throat up to the stand and round to the back; outer edge from the point
+  // on the chest over the shoulder, kept inside the braces
+  const fold = [front(0.006, 1.34, T + 0.004), ring(24, standY(24) + 0.004, standR(24) + 0.004), ring(60, standY(60) + 0.004, standR(60) + 0.004), ring(95, standY(95) + 0.004, standR(95) + 0.004), ring(138, standY(138) + 0.004, standR(138) + 0.004), ring(180, standY(180) + 0.004, standR(180) + 0.004)];
+  const edge = [front(0.134, 1.305, T + 0.011), front(0.141, 1.356, T + 0.008), top(0.13, 0.03, T + 0.005), top(0.112, -0.03, T + 0.004), top(0.075, -0.084, T + 0.004), top(0, -0.104, T + 0.004)];
+  const outward = (p) => new THREE.Vector3(p.x, 0.6, p.z + 0.02).normalize();
   for (const mirror of [false, true]) {
-    const A = inner.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
-    const B = outer.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
-    const leaf = thickSheet(A, B, 0.014, outward, { mat: 'uniform' });
-    leaf.jitter(0.0018, mirror ? 5 : 6);
-    out.add(leaf);
+    const m = (row) => row.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
+    out.add(thickSheet(m(fold), m(edge), T, outward, { mat: 'uniform' }));
   }
-  // collar stand hugging the neck (open at the front)
-  const arc = (y, r, yLift) => {
-    const pts = [];
-    for (let i = 0; i <= 10; i++) {
-      const t = THREE.MathUtils.degToRad(44 + (272 * i) / 10);
-      const back = Math.max(0, -Math.cos(t));
-      pts.push(new THREE.Vector3(Math.sin(t) * r, y + yLift * back, Math.cos(t) * r - 0.006));
-    }
-    return pts;
-  };
-  const stand = thickSheet(arc(1.35, 0.087, 0.02), arc(1.404, 0.084, 0.012), 0.012, (p) => new THREE.Vector3(p.x, 0, p.z).normalize(), {
-    mat: 'uniform',
-  });
-  out.add(stand);
-  out.bone('Chest');
+  // the shirt showing in the V between the leaves, up to the stand
+  const v = front(0, 1.332, 0.002);
+  const throat = ring(0, standY(0) - 0.004, standR(0) + 0.001);
+  const sideL = ring(24, standY(24) - 0.002, standR(24) + 0.002);
+  const sideR = sideL.clone().setX(-sideL.x);
+  const shirt = new Poly('shirt');
+  shirt.f([shirt.vv(v), shirt.vv(sideL), shirt.vv(throat), shirt.vv(sideR)]);
+  shirt.orientFrom(new THREE.Vector3(0, 1.3, 0));
+  out.add(shirt);
+  out.skinBy(jacketWeights);
   return out;
 }
 
@@ -208,7 +222,7 @@ export function buildCollar() {
 // Head, hair, neck
 // ---------------------------------------------------------------------------
 
-export const HEAD_CENTER = new THREE.Vector3(0, 1.528, 0.012);
+export const HEAD_CENTER = new THREE.Vector3(0, 1.543, 0.012);
 
 // yRel, rx, rz front, rz back, cz
 const HEAD_RINGS = [
@@ -299,14 +313,14 @@ export function buildNeck() {
     [
       [1.28, 0.061, 0.058, 0, -0.006],
       [1.35, 0.064, 0.061, 0, -0.008],
-      [1.425, 0.06, 0.058, 0, -0.004],
-      [1.46, 0.045, 0.045, 0, 0],
+      [1.44, 0.06, 0.058, 0, -0.004],
+      [1.475, 0.045, 0.045, 0, 0],
     ],
     { n: 8, mat: 'skin' },
   );
   neck.skinBy((p) => {
     if (p.y < 1.33) return [['Chest', 1]];
-    if (p.y < 1.4) return [['Neck', 1]];
+    if (p.y < 1.415) return [['Neck', 1]];
     return [['Head', 1]];
   });
   return neck;
@@ -321,57 +335,70 @@ function sideify(poly, side) {
   return poly;
 }
 
-export function buildUpperArm(side) {
-  // The sleeve starts inside the jacket and its top rings are skinned to the
-  // shoulder (clavicle) bone, blending into the arm bone: when the arm hangs
-  // down the shoulder deforms as one sloped surface instead of a ball cap.
-  const p = axisTube(
-    [
-      [-0.09, 0.07, 0.072],
-      [-0.05, 0.078, 0.078],
-      [-0.012, 0.083, 0.081],
-      [0.035, 0.085, 0.083],
-      [0.09, 0.083, 0.081],
-      [0.17, 0.079, 0.077],
-      [0.27, 0.074, 0.072],
-      [0.345, 0.07, 0.068],
-      [0.38, 0.058, 0.057],
-      [0.405],
-    ],
-    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
-  );
-  p.jitter(0.004, 21);
-  p.skinBy((q) => {
-    const t = smooth(clamp((q.y + 0.065) / 0.15, 0, 1));
-    if (t <= 0) return [[`${side}Shoulder`, 1]];
-    if (t >= 1) return [[`${side}UpperArm`, 1]];
-    return [
-      [`${side}Shoulder`, 1 - t],
-      [`${side}UpperArm`, t],
-    ];
-  });
-  p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX, DIM.shoulderY, 0);
-  return sideify(p, side);
+/**
+ * Skin weights along the sleeve: where it is buried in the jacket it moves
+ * exactly like the jacket around it (chest + clavicle), then blends into the
+ * upper arm and, across the elbow, into the forearm.
+ */
+function sleeveWeights(side, s, p) {
+  const E = DIM.upperArm;
+  const a = smooth(clamp((s - 0.005) / 0.115, 0, 1));
+  const b = smooth(clamp((s - (E - 0.05)) / 0.1, 0, 1));
+  const out = [];
+  if (a < 1) for (const [bone, w] of jacketWeights(p)) out.push([bone, w * (1 - a)]);
+  out.push([`${side}UpperArm`, a * (1 - b)], [`${side}LowerArm`, b]);
+  return out.filter(([, w]) => w > 1e-3);
 }
 
-export function buildForearm(side) {
+/**
+ * One continuous sleeve from inside the jacket's shoulder to the cuff. The
+ * top rings blend from the clavicle bone into the arm (no ball cap at the
+ * shoulder) and the elbow blends upper arm -> forearm with a small fold.
+ */
+export function buildSleeve(side) {
+  const E = DIM.upperArm;
+  const L = DIM.upperArm + DIM.lowerArm;
   const p = axisTube(
     [
-      [-0.062],
-      [-0.04, 0.054, 0.052],
-      [0.0, 0.068, 0.066],
-      [0.11, 0.066, 0.064],
-      [0.222, 0.062, 0.06],
-      [0.232, 0.067, 0.065],
-      [0.29, 0.066, 0.064],
-      [0.296, 0.051, 0.049],
-      [0.265, 0.045, 0.043],
+      [-0.095, 0.058, 0.06],
+      [-0.055, 0.066, 0.066],
+      [-0.015, 0.07, 0.069],
+      [0.035, 0.072, 0.07],
+      [0.12, 0.07, 0.068],
+      [0.22, 0.067, 0.065, 0, 0, 0.12],
+      [E - 0.045, 0.064, 0.062, 0, 0, 0.04],
+      [E, 0.066, 0.064],
+      [E + 0.045, 0.061, 0.059],
+      [E + 0.12, 0.058, 0.056, 0, 0, -0.14],
+      [L - 0.08, 0.054, 0.052],
+      [L - 0.068, 0.059, 0.057],
+      [L - 0.008, 0.058, 0.056],
+      [L - 0.002, 0.046, 0.044],
+      [L - 0.03, 0.042, 0.04],
     ],
-    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
+    { n: 10, mat: 'uniform', phase: Math.PI / 10 },
   );
-  p.jitter(0.0035, 22, [1, 1, 1], (q) => q.y < 0.288);
-  p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX + DIM.upperArm, DIM.shoulderY, 0);
-  return sideify(p, side).bone(`${side}LowerArm`);
+  p.warp((q) => {
+    // elbow: the point bulges out at the back, the inside creases
+    const k = Math.max(0, 1 - Math.abs(q.y - E) / 0.05);
+    if (k > 0) q.z = q.z < 0 ? q.z - 0.008 * k : q.z * (1 - 0.14 * k);
+  });
+  p.jitter(0.001, 21, [1, 0.4, 1], (q) => q.y < L - 0.012);
+  const along = p.pos.map((q) => q.y);
+  p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX, DIM.shoulderY, 0);
+  // Bend into the A-pose around the shoulder: the inner end stays level and
+  // its top becomes the top of the shoulder, so the sleeve rolls over the
+  // joint into the arm instead of ending in a cap.
+  const full = armBindMatrix('Left');
+  const pivot = new THREE.Vector3(DIM.shoulderX, DIM.shoulderY, 0);
+  p.warp((q) => {
+    const t = smooth(clamp((q.x - DIM.shoulderX + 0.07) / 0.15, 0, 1));
+    if (t >= 1) return q.applyMatrix4(full);
+    if (t <= 0) return q;
+    q.sub(pivot).applyAxisAngle(Z_AXIS, (-t * DIM.armDrop * Math.PI) / 180).add(pivot);
+  });
+  sideify(p, side);
+  return p.skinBy((q, i) => sleeveWeights(side, along[i], q));
 }
 
 function boxAlong(len, thick, width, chamfer, from, dir, up, mat) {
@@ -389,8 +416,8 @@ export function buildHand(side) {
   const Y = DIM.shoulderY;
   const wrist = axisTube(
     [
-      [-0.055, 0.032, 0.037],
-      [0.02, 0.034, 0.039],
+      [-0.055, 0.029, 0.033],
+      [0.02, 0.031, 0.035],
     ],
     { n: 6, mat: 'skin', phase: Math.PI / 6 },
   );
@@ -430,6 +457,7 @@ export function buildHand(side) {
   hand.add(thumb1);
   hand.add(thumb2);
   hand.jitter(0.0012, 7);
+  hand.apply(armBindMatrix('Left'));
   if (side === 'Right') hand.mirrorX();
   // prefix bone names with side
   hand.skin = hand.skin.map((s) => s.map(([b, w]) => [`${side}${b}`, w]));
@@ -441,27 +469,30 @@ export function buildHand(side) {
 // ---------------------------------------------------------------------------
 
 export function buildLeg(side) {
-  // One continuous trouser leg from inside the tunic down to the boot top.
-  // The knee is blended between the thigh and shin bones, so there is no
-  // seam or step when the leg bends.
+  // One continuous trouser leg from inside the tunic down to the boot top,
+  // bloused over the boot. The knee is blended between the thigh and shin
+  // bones, so there is no seam or step when the leg bends.
   const knee = DIM.hipY - DIM.kneeY;
   const p = axisTube(
     [
       [-0.12],
-      [-0.08, 0.088, 0.096],
-      [0.0, 0.106, 0.122],
-      [0.08, 0.122, 0.135],
-      [0.17, 0.131, 0.138],
-      [0.26, 0.128, 0.134],
-      [knee, 0.124, 0.129],
-      [knee + 0.08, 0.123, 0.127],
-      [knee + 0.15, 0.129, 0.132],
-      [knee + 0.18, 0.13, 0.132],
-      [knee + 0.197, 0.1, 0.106],
+      [-0.08, 0.082, 0.092],
+      [0.0, 0.094, 0.112],
+      [0.09, 0.105, 0.125],
+      [0.2, 0.105, 0.127, 0, 0, 0.22],
+      [knee, 0.097, 0.118, 0, 0, -0.1],
+      [knee + 0.09, 0.098, 0.116, 0, 0, 0.14],
+      [knee + 0.135, 0.107, 0.123, 0, 0, -0.06],
+      [knee + 0.15, 0.106, 0.122, 0, 0, -0.06],
+      [knee + 0.162, 0.082, 0.088, 0, 0, -0.06],
     ],
     { n: 8, mat: 'uniform', phase: Math.PI / 8 },
   );
-  p.jitter(0.0055, 31);
+  p.warp((q) => {
+    // crease behind the knee, a fold across the front of the knee
+    const k = Math.max(0, 1 - Math.abs(q.y - knee) / 0.05);
+    if (k > 0) q.z *= q.z < 0 ? 1 - 0.08 * k : 1 + 0.03 * k;
+  });
   p.skinBy((q) => {
     const t = smooth(clamp((q.y - (knee - 0.045)) / 0.09, 0, 1));
     if (t <= 0) return [[`${side}UpperLeg`, 1]];
@@ -478,7 +509,7 @@ export function buildLeg(side) {
 export function buildBody() {
   const parts = [buildTorso(), buildCollar(), buildHead(), buildNeck()];
   for (const side of ['Left', 'Right']) {
-    parts.push(buildUpperArm(side), buildForearm(side), buildHand(side), buildLeg(side));
+    parts.push(buildSleeve(side), buildHand(side), buildLeg(side));
   }
   return parts;
 }

@@ -14,7 +14,11 @@ export const SLOTS = [
   { id: 'metal', label: 'Metal', hint: 'Gun metal, buckles, studs' },
 ];
 
-export const SLOT_ORDER = SLOTS.map((s) => s.id);
+// Shades derived from a palette slot (follow it when it is recoloured, not
+// editable on their own): the darker shirt seen in the tunic's neck opening.
+export const DERIVED = [{ id: 'shirt', from: 'uniform', scale: 0.4 }];
+
+export const SLOT_ORDER = [...SLOTS.map((s) => s.id), ...DERIVED.map((d) => d.id)];
 
 // Base colours (sRGB) tuned so the lit render matches the reference sheet.
 export const PRESETS = {
@@ -117,5 +121,15 @@ export function createMaterials(colors = PRESETS.reference.colors) {
     });
     mats[slot.id] = m;
   }
+  for (const d of DERIVED) {
+    mats[d.id] = mats[d.from].clone();
+    mats[d.id].name = d.id;
+  }
+  updateDerived(mats);
   return mats;
+}
+
+/** Recompute derived shades after a slot colour changed. */
+export function updateDerived(mats) {
+  for (const d of DERIVED) mats[d.id].color.copy(mats[d.from].color).multiplyScalar(d.scale);
 }
