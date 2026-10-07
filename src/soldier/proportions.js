@@ -1,8 +1,8 @@
 // Realistic proportions. The parts are modelled at the reference sheet's
 // stylised proportions (big head, no neck, short legs, very broad chest);
 // this module reshapes the finished meshes and the skeleton into an adult
-// build of about 7.3 heads: legs and trunk ~15% longer, head and helmet 20%
-// smaller on a 4 cm longer neck, chest a little narrower.
+// build of about 7.4 heads: legs and trunk ~15% longer, head and helmet 20%
+// smaller on a 6.5 cm longer neck, chest a little narrower.
 // It runs once on every built part, so gear (including your own) is fitted
 // the same way as the body:
 //   - anything on the trunk or legs follows a height remap (cloth stretches),
@@ -40,7 +40,7 @@ function widthScale(y) {
 }
 
 export const HEAD_SCALE = 0.8;
-const NECK_EXTRA = 0.04; // the chin clears the collar
+const NECK_EXTRA = 0.065; // a visible neck between the collar and the jaw
 const NECK_JOINT = new THREE.Vector3(0, 1.435, 0); // Head bone as modelled
 
 const ARM = /^(Left|Right)(UpperArm|LowerArm|Hand|Fingers1|Fingers2|Thumb1|Thumb2)$/;

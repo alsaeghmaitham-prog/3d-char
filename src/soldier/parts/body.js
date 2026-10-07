@@ -146,26 +146,60 @@ export function torsoMesh() {
 
 export function buildTorso() {
   const N = 12;
-  // small twists between rings give diagonal cloth facets instead of a
-  // straight-sided tube (the hem, belt line and shoulders stay untwisted)
-  const TWIST = [0, 0, 0.05, 0, 0.07, -0.06, 0.05, 0, 0, 0, 0, 0];
-  const rings = PROFILE.map((f, k) => {
+  // Mesh rings: the profile rings plus an in-between ring in each span from
+  // the skirt to the chest. Neighbouring rings are turned slightly against
+  // each other (like the trousers), so the cloth breaks into diagonal
+  // facets instead of flat panels. The hem, belt line and shoulders stay
+  // untwisted. Twisting keeps every vertex on the jacket's surface, so the
+  // belt and pouches still sit on it.
+  const between = (a, b) => (t) => a(t).lerp(b(t), 0.5);
+  const FOLDS = [
+    // [profile ring, twist of the ring, twist of the ring between it and the next]
+    [0, 0, null],
+    [1, 0, 0.1],
+    [2, -0.04, 0.09],
+    [3, 0, 0.02],
+    [4, 0.11, -0.05],
+    [5, 0.15, -0.09],
+    [6, 0.07, -0.12],
+    [7, 0.04, -0.03],
+    [8, 0, null],
+    [9, 0, null],
+    [10, 0, null],
+    [11, 0, null],
+  ];
+  const ringFns = [];
+  for (const [k, tw, mid] of FOLDS) {
+    ringFns.push([PROFILE[k], tw]);
+    if (mid !== null) ringFns.push([between(PROFILE[k], PROFILE[k + 1]), mid]);
+  }
+  const rings = ringFns.map(([f, tw]) => {
     const r = [];
-    for (let i = 0; i < N; i++) r.push(f((i / N) * Math.PI * 2 + (TWIST[k] || 0)));
+    for (let i = 0; i < N; i++) r.push(f((i / N) * Math.PI * 2 + tw));
     return r;
   });
   // inner lip closing the hem
   const lip = ellipseRing({ n: N, rx: 0.238, rz: 0.158, rzBack: 0.152, y: 0.752, power: 2.5 });
   const poly = loft([lip, ...rings], { mat: 'uniform', start: 'flat', end: 'flat' });
-  poly.jitter(0.0012, 11, [1, 0.5, 1], (p) => p.y > 0.745 && p.y < 1.37);
+  poly.jitter(0.0022, 11, [1, 0.5, 1], (p) => p.y > 0.745 && p.y < 1.37);
   poly.skinBy(jacketWeights);
 
-  // placket down the centre front
+  // placket down the centre front, laid on the faceted cloth
   const ys = [0.74, 0.78, 0.86, 0.96, 1.06, 1.16, 1.24, 1.32];
-  const path = ys.map((y) => torsoPoint(0, y, 0.0015));
-  const normals = ys.map((y) => torsoNormal(0, y));
-  const placket = strap(path, normals, 0.03, 0.0055, { mat: 'uniform' });
-  placket.skinBy((p) => torsoWeights(p.y));
+  const onFront = (q, dir) => raycastPoly(poly, q.clone().addScaledVector(dir, -0.2), dir);
+  const path = [];
+  const normals = [];
+  for (const y of ys) {
+    const h = onFront(new THREE.Vector3(0, y, 0.5), new THREE.Vector3(0, 0, -1));
+    path.push(h.point.addScaledVector(h.normal, 0.0015));
+    normals.push(h.normal);
+  }
+  const conform = (q, n) => {
+    const h = onFront(q.clone().addScaledVector(n, 0.03), n.clone().negate());
+    return h && h.t < 0.25 ? h.point.addScaledVector(n, 0.0015) : null;
+  };
+  const placket = strap(path, normals, 0.03, 0.0055, { mat: 'uniform', conform });
+  placket.skinBy(jacketWeights);
   poly.add(placket);
   return poly;
 }
@@ -196,7 +230,7 @@ export function buildCollar() {
   const sd = (deg) => (deg > 180 ? 360 - deg : deg);
   const standTop = angles.map((deg) => ring(deg, standY(sd(deg)), standR(sd(deg))));
   const standBot = angles.map((deg) => ring(deg, torsoSurface(deg * D2R, 1.5).p.y - 0.012, standR(sd(deg)) - 0.004));
-  out.add(thickSheet(standTop, standBot, 0.008, (p) => new THREE.Vector3(p.x, 0, p.z + 0.008), { mat: 'uniform', closed: true }));
+  out.add(thickSheet(standTop, standBot, 0.008, (p) => new THREE.Vector3(p.x, 0, p.z + 0.008), { mat: 'collar', closed: true }));
   // fold-down leaves (left half, mirrored): fold line from the V at the
   // throat up to the stand and round to the back; outer edge from the point
   // on the chest over the shoulder, kept inside the braces
@@ -205,7 +239,7 @@ export function buildCollar() {
   const outward = (p) => new THREE.Vector3(p.x, 0.6, p.z + 0.02).normalize();
   for (const mirror of [false, true]) {
     const m = (row) => row.map((p) => (mirror ? new THREE.Vector3(-p.x, p.y, p.z) : p.clone()));
-    out.add(thickSheet(m(fold), m(edge), T, outward, { mat: 'uniform' }));
+    out.add(thickSheet(m(fold), m(edge), T, outward, { mat: 'collar' }));
   }
   // the shirt showing in the V between the leaves, up to the stand
   const v = front(0, 1.332, 0.002);
@@ -369,13 +403,13 @@ export function buildSleeve(side) {
       [-0.055, 0.063, 0.071],
       [-0.015, 0.069, 0.075],
       [0.035, 0.075, 0.077],
-      [0.12, 0.076, 0.074],
-      [0.22, 0.072, 0.07, 0, 0, 0.12],
-      [E - 0.045, 0.068, 0.066, 0, 0, 0.04],
+      [0.12, 0.076, 0.074, 0, 0, 0.09],
+      [0.22, 0.072, 0.07, 0, 0, -0.07],
+      [E - 0.045, 0.068, 0.066, 0, 0, 0.1],
       [E, 0.071, 0.069],
-      [E + 0.045, 0.068, 0.066],
-      [E + 0.12, 0.064, 0.062, 0, 0, -0.14],
-      [L - 0.08, 0.057, 0.055],
+      [E + 0.045, 0.068, 0.066, 0, 0, -0.08],
+      [E + 0.12, 0.064, 0.062, 0, 0, 0.13],
+      [L - 0.08, 0.057, 0.055, 0, 0, -0.05],
       [L - 0.068, 0.064, 0.062],
       [L - 0.008, 0.063, 0.061],
       [L - 0.002, 0.05, 0.048],

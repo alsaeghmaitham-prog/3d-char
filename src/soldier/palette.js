@@ -15,8 +15,12 @@ export const SLOTS = [
 ];
 
 // Shades derived from a palette slot (follow it when it is recoloured, not
-// editable on their own): the darker shirt seen in the tunic's neck opening.
-export const DERIVED = [{ id: 'shirt', from: 'uniform', scale: 0.4 }];
+// editable on their own): the darker shirt seen in the tunic's neck opening
+// and the collar, a little darker than the tunic so it stands out.
+export const DERIVED = [
+  { id: 'shirt', from: 'uniform', scale: 0.4 },
+  { id: 'collar', from: 'uniform', scale: 0.7 },
+];
 
 export const SLOT_ORDER = [...SLOTS.map((s) => s.id), ...DERIVED.map((d) => d.id)];
 

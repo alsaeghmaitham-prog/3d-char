@@ -37,14 +37,14 @@ export const POSES = {
     hips: { pos: [0, remapY(0.83), 0.0], rot: [3, -20, 0] },
     spine: [3, -8, 0],
     chest: [5, -8, 0],
-    neck: [11, 14, 6],
+    neck: [13, 14, 6],
     head: [2, 20, 14],
     shoulders: { Left: [0, -6, -5], Right: [0, -4, -12] }, // firing shoulder raised to the cheek
     feet: { Left: { pos: [0.13, 0.2], yaw: -18 }, Right: { pos: [-0.2, -0.17], yaw: -62 } },
     knees: { Left: [0.2, 0, 1], Right: [-0.4, 0, 1] },
     // butt plate bedded in the right shoulder pocket (offset from the shoulder
     // joint in the chest's frame), rifle level and pointing at the target
-    weapon: { shoulder: [0.15, -0.035, 0.105], origin: [-0.135, remapY(1.37), 0.27], dir: [0.0, 0.01, 1], roll: 0 },
+    weapon: { shoulder: [0.15, -0.015, 0.105], origin: [-0.135, remapY(1.37), 0.27], dir: [0.0, 0.01, 1], roll: 0 },
     elbows: { Left: [0.25, -1, -0.15], Right: [-0.7, -0.7, -0.25] },
     unarmed: { Left: [0.29, remapY(0.72), 0.06], Right: [-0.29, remapY(0.72), 0.06] },
   },

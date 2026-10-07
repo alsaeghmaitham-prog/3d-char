@@ -435,12 +435,12 @@ function runApp() {
     $('#stats').textContent = `${tris.toLocaleString('en-US')} tris · ${soldier.rig.bones.length} bones`;
   }
   const spec = [
-    ['Height', '1.90 m, 1.96 m with helmet; adult proportions, about 7.3 heads (Y-up, metres)'],
+    ['Height', '1.92 m, 1.98 m with helmet; adult proportions, about 7.4 heads (Y-up, metres)'],
     ['Facing', '+Z forward, glTF convention'],
     ['Skeleton', `${soldier.rig.bones.length} bones, humanoid names (Hips, Spine, Chest, LeftUpperArm…)`],
     ['Bind pose', 'A-pose (arms 45° down); the ready pose is stored as the default pose'],
     ['Gear', 'Each item is its own skinned mesh on the shared skeleton; weapons hang off a socket on the right hand'],
-    ['Materials', `${SLOTS.length} flat colour slots: ${SLOTS.map((s) => s.label.toLowerCase()).join(', ')}; plus a darker shirt shade that follows the uniform`],
+    ['Materials', `${SLOTS.length} flat colour slots: ${SLOTS.map((s) => s.label.toLowerCase()).join(', ')}; plus darker collar and shirt shades that follow the uniform`],
     ['Clips', ANIMATIONS.map((a) => a.label).join(', ')],
   ];
   const specEl = $('#spec');

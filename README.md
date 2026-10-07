@@ -35,11 +35,11 @@ Both GLBs are glTF 2.0 binary files. They pass the Khronos glTF validator with n
 | Property | Value |
 | --- | --- |
 | Units / axes | metres, Y-up, character faces +Z (glTF convention) |
-| Height | 1.90 m (1.96 m with helmet), adult proportions of about 7.3 heads |
-| Triangles | ≈ 6,050 for the reference loadout (flat-shaded, hard normals) |
+| Height | 1.92 m (1.98 m with helmet), adult proportions of about 7.4 heads |
+| Triangles | ≈ 6,200 for the reference loadout (flat-shaded, hard normals) |
 | Skeleton | 30 bones, humanoid names |
 | Bind pose | A-pose (arms 45° down). The rifle-ready pose is saved as the default pose. |
-| Materials | 10 flat-colour PBR materials: one per palette slot, plus `shirt`, a darker shade of the uniform colour seen in the collar opening |
+| Materials | 11 flat-colour PBR materials: one per palette slot, plus two darker shades of the uniform colour that follow it when you recolour: `collar` and `shirt` (seen in the collar opening) |
 | Animations | `Ready`, `Idle` (4 s loop), `Walk` (1.1 s in-place loop), `Run` (0.72 s in-place loop), `Aim`, `APose` |
 
 **Bones:** `Root › Hips › Spine › Chest › Neck › Head`, plus for each side `LeftShoulder › LeftUpperArm › LeftLowerArm › LeftHand` (with `LeftFingers1/2` and `LeftThumb1/2`) and `LeftUpperLeg › LeftLowerLeg › LeftFoot › LeftToes`. Unity's Humanoid avatar, Unreal's IK Retargeter and Godot's humanoid profile can all map these names automatically, so other humanoid animations (Mixamo etc.) can be retargeted onto the character.
@@ -98,6 +98,6 @@ The bundle inlines three.js, so `index.html` works offline. Fonts load from Goog
 
 ## Notes on matching the sheet
 
-Colours, gear details and the shape of the clothing were measured from the sheet, and the colours were calibrated against the rendered pixels. The sheet's figure is stylised (big head, no visible neck, short legs). The model keeps its look but has adult proportions: legs and trunk about 15% longer, a smaller head on a visible neck, and shoulders that slope down from the neck like the sheet's. Widths at every height were measured against the sheet's front, side and back views after allowing for the longer body. The five views on the sheet don't agree exactly on the rifle angle: the side view shows it pointing further forward than the front view allows. The pose follows the front and 3/4 views, where the rifle crosses the body from the right chest down to the left knee.
+Colours, gear details and the shape of the clothing were measured from the sheet, and the colours were calibrated against the rendered pixels. The sheet's figure is stylised (big head, no visible neck, short legs). The model keeps its look but has adult proportions: legs and trunk about 15% longer, a smaller head on a visible neck, and shoulders that slope down from the neck like the sheet's. The tunic, sleeves and trousers break into the same kind of faceted cloth folds, and the collar is a shade darker than the tunic so it reads clearly. Widths at every height were measured against the sheet's front, side and back views after allowing for the longer body. The five views on the sheet don't agree exactly on the rifle angle: the side view shows it pointing further forward than the front view allows. The pose follows the front and 3/4 views, where the rifle crosses the body from the right chest down to the left knee.
 
 The walk and run are in-place cycles built from gait measurements: heel strike, roll over the foot and toe-off, a straight knee in mid-stance and a folded knee in swing, with the pelvis turning, dipping and bobbing (the run has a flight phase with both feet off the ground). The rifle stays at the ready in both. When aiming, the butt is bedded in the shoulder pocket and the head rests on the stock with the eye behind the sights.
