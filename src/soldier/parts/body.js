@@ -21,8 +21,8 @@ export const TORSO = [
   [1.06, 0.21, 0.15, 0.144, 0.01, 2.8],
   [1.16, 0.216, 0.155, 0.147, 0.01, 2.7],
   [1.24, 0.218, 0.152, 0.146, 0.004, 2.7],
-  [1.31, 0.218, 0.138, 0.137, -0.002, 2.5],
-  [1.355, 0.206, 0.118, 0.124, -0.004, 2.4],
+  [1.31, 0.222, 0.138, 0.137, -0.002, 2.5],
+  [1.36, 0.214, 0.118, 0.124, -0.004, 2.4],
 ];
 
 export function torsoParams(y) {
@@ -108,7 +108,7 @@ function superPoint(theta, a, bf, bb, cz, pw, y) {
 }
 const TOP_RINGS = [
   // trapezius: broad, nearly level shoulders, a little higher at the sides
-  (t) => superPoint(t, 0.176, 0.096, 0.106, -0.006, 2.2, 1.378 + 0.024 * Math.pow(Math.sin(t), 2)),
+  (t) => superPoint(t, 0.182, 0.096, 0.106, -0.006, 2.2, 1.38 + 0.024 * Math.pow(Math.sin(t), 2)),
   (t) => superPoint(t, 0.082, 0.074, 0.08, -0.008, 2, 1.394 + 0.014 * (1 - Math.cos(t))),
 ];
 const PROFILE = [...TORSO.map(([y, a, bf, bb, cz, pw]) => (t) => superPoint(t, a, bf, bb, cz, pw, y)), ...TOP_RINGS];
@@ -360,10 +360,10 @@ export function buildSleeve(side) {
   const L = DIM.upperArm + DIM.lowerArm;
   const p = axisTube(
     [
-      [-0.095, 0.058, 0.06],
-      [-0.055, 0.066, 0.066],
-      [-0.015, 0.07, 0.069],
-      [0.035, 0.072, 0.07],
+      [-0.095, 0.056, 0.06],
+      [-0.055, 0.061, 0.066],
+      [-0.015, 0.066, 0.069],
+      [0.035, 0.07, 0.07],
       [0.12, 0.07, 0.068],
       [0.22, 0.067, 0.065, 0, 0, 0.12],
       [E - 0.045, 0.064, 0.062, 0, 0, 0.04],
