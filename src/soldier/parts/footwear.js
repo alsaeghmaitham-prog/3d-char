@@ -117,6 +117,10 @@ export function buildGaiterBoots() {
 }
 
 export const FOOTWEAR = {
-  boots: { label: 'Field boots', build: buildBoots },
-  gaiters: { label: 'Boots + gaiters', build: buildGaiterBoots },
+  boots: { label: 'Field boots', build: buildBoots, display: () => bootFoot('Left') },
+  gaiters: {
+    label: 'Boots + gaiters',
+    build: buildGaiterBoots,
+    display: () => bootFoot('Left', { gaiter: true, shaftTop: 0.3, shaftR: [0.08, 0.088] }),
+  },
 };

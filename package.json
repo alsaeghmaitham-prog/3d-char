@@ -7,11 +7,13 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "dev": "node tools/build.mjs --watch",
-    "shots": "node tools/screenshots.mjs",
-    "export": "node tools/export-glb.mjs"
+    "export": "node tools/export-glb.mjs",
+    "validate": "node tools/validate-glb.mjs",
+    "shots": "node tools/screenshots.mjs out"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
+    "gltf-validator": "2.0.0-dev.3.10",
     "playwright": "1.56.1",
     "three": "0.186.1"
   }

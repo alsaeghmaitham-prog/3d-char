@@ -1,4 +1,7 @@
-// Bundles the viewer into a single self-contained HTML file (index.html).
+// Bundles the viewer into self-contained HTML:
+//   index.html                  complete document, open it straight from disk
+//   dist/artifact.html          same page without the html/head/body wrapper,
+//                               the shape claude.ai artifacts are published in
 import * as esbuild from 'esbuild';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -6,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const watch = process.argv.includes('--watch');
-const outFile = path.join(root, process.argv.find((a) => a.startsWith('--out='))?.slice(6) || 'index.html');
 
 async function build() {
   const t0 = Date.now();
@@ -22,11 +24,27 @@ async function build() {
   });
   const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
   const css = await fs.readFile(path.join(root, 'src/viewer/styles.css'), 'utf8');
-  const html = (await fs.readFile(path.join(root, 'src/viewer/template.html'), 'utf8'))
-    .replace('/*__CSS__*/', () => css)
-    .replace('/*__JS__*/', () => js);
-  await fs.writeFile(outFile, html);
-  console.log(`built ${path.relative(root, outFile)} (${(html.length / 1024).toFixed(0)} KB) in ${Date.now() - t0} ms`);
+  const template = await fs.readFile(path.join(root, 'src/viewer/template.html'), 'utf8');
+  const filled = template.replace('/*__CSS__*/', () => css).replace('/*__JS__*/', () => js);
+  const [head, body] = filled.split('<!--BODY-->');
+  const full = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
+    head.trim(),
+    '</head>',
+    '<body>',
+    body.trim(),
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
+  await fs.writeFile(path.join(root, 'index.html'), full);
+  await fs.mkdir(path.join(root, 'dist'), { recursive: true });
+  await fs.writeFile(path.join(root, 'dist/artifact.html'), head.trim() + '\n' + body.trim() + '\n');
+  console.log(`built index.html (${(full.length / 1024).toFixed(0)} KB) + dist/artifact.html in ${Date.now() - t0} ms`);
 }
 
 await build();

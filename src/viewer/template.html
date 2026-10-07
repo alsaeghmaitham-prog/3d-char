@@ -1,13 +1,72 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Low-poly Rifleman</title>
+<title>Low-Poly Rifleman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Jost:wght@400;500;600&display=swap">
 <style>/*__CSS__*/</style>
-</head>
-<body>
-<canvas id="view"></canvas>
+<!--BODY-->
+<div class="app" id="app">
+  <header class="bar">
+    <div class="brand">
+      <h1>Low-Poly Rifleman</h1>
+      <p>Rigged infantry character with swappable gear, ready for game engines.</p>
+    </div>
+    <div class="modes" role="tablist" aria-label="Display mode">
+      <button type="button" role="tab" id="mode-inspect" data-mode="inspect" aria-selected="true">Inspect</button>
+      <button type="button" role="tab" id="mode-sheet" data-mode="sheet" aria-selected="false">Turnaround sheet</button>
+    </div>
+  </header>
+
+  <main class="work">
+    <section class="stage" id="stage" aria-label="3D view">
+      <canvas id="view" aria-label="Rotatable 3D view of the soldier"></canvas>
+      <div class="sheet-overlay" id="sheetOverlay" hidden></div>
+
+      <div class="hud hud-top" id="hudViews">
+        <div class="views" role="group" aria-label="Camera angle"></div>
+        <button type="button" class="toggle" id="orbit" aria-pressed="false" title="Turntable rotation">Turntable</button>
+      </div>
+      <div class="hud hud-bottom">
+        <div class="anims" role="group" aria-label="Animation" id="anims"></div>
+        <p class="stats"><span id="stats"></span><span class="hint" id="hint">Drag to orbit · scroll to zoom · right-drag to pan</span></p>
+      </div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </section>
+
+    <aside class="ledger" aria-label="Character settings">
+      <section class="panel" aria-labelledby="h-loadout">
+        <header class="panel-head">
+          <h2 id="h-loadout">Loadout</h2>
+          <button type="button" class="link" id="resetLoadout">Reference kit</button>
+        </header>
+        <div id="loadout" class="slots"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-palette">
+        <header class="panel-head">
+          <h2 id="h-palette">Palette</h2>
+          <label class="select">
+            <span class="sr-only">Colour preset</span>
+            <select id="preset"></select>
+          </label>
+        </header>
+        <ul id="palette" class="palette"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="h-export">
+        <header class="panel-head"><h2 id="h-export">Export</h2></header>
+        <div class="actions">
+          <button type="button" class="btn primary" id="exportGlb">Download GLB</button>
+          <button type="button" class="btn" id="exportKit">Modular kit GLB</button>
+          <button type="button" class="btn" id="exportPng">Save image</button>
+        </div>
+        <p class="note" id="exportNote">The GLB holds the mesh, skeleton, materials and the five animation clips. The modular kit includes every gear variant as its own mesh, so you can switch items on and off in your engine.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-spec">
+        <header class="panel-head"><h2 id="h-spec">Rig &amp; mesh</h2></header>
+        <dl class="spec" id="spec"></dl>
+      </section>
+    </aside>
+  </main>
+</div>
 <script>/*__JS__*/</script>
-</body>
-</html>

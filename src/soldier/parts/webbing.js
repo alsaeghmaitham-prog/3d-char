@@ -158,21 +158,23 @@ function braceSide(s) {
   const torso = torsoMesh();
   const path = [];
   const normals = [];
-  const hit = (origin, dir) => {
+  const hit = (origin, dir, lift = 0.0025) => {
     const h = raycastPoly(torso, origin, dir);
     if (!h) return;
-    path.push(h.point.addScaledVector(h.normal, 0.0025));
+    path.push(h.point.addScaledVector(h.normal, lift));
     normals.push(h.normal);
   };
   const xf = 0.17 * s;
   const xb = 0.14 * s;
+  const xt = 0.148 * s;
   // up the chest
   for (const y of [BELT_HIGH - 0.012, 0.96, 1.06, 1.16, 1.24, 1.29]) hit(new THREE.Vector3(xf, y, 0), new THREE.Vector3(0, 0, 1));
-  // over the shoulder: fan of rays in the sagittal plane
+  // over the shoulder: fan of rays in the sagittal plane, lifted clear of the collar
   for (let i = 1; i <= 9; i++) {
-    const psi = (i / 10) * Math.PI;
-    const x = xf + (xb - xf) * (i / 10);
-    hit(new THREE.Vector3(x, 1.24, -0.004), new THREE.Vector3(0, Math.sin(psi), Math.cos(psi)));
+    const u = i / 10;
+    const psi = u * Math.PI;
+    const x = u < 0.5 ? xf + (xt - xf) * (u / 0.5) : xt + (xb - xt) * ((u - 0.5) / 0.5);
+    hit(new THREE.Vector3(x, 1.24, -0.004), new THREE.Vector3(0, Math.sin(psi), Math.cos(psi)), 0.0025 + 0.019 * Math.pow(Math.sin(psi), 0.7));
   }
   // down the back
   for (const y of [1.29, 1.2, 1.1, 1.0, BELT_HIGH - 0.012]) hit(new THREE.Vector3(xb, y, 0), new THREE.Vector3(0, 0, -1));

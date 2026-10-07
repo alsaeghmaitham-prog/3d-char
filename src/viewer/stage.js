@@ -16,29 +16,28 @@ export function createRenderer(canvas, { preserve = false } = {}) {
   return renderer;
 }
 
-export function createStage({ grid = true } = {}) {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BG);
-  scene.fog = new THREE.Fog(BG, 9, 22);
-
+/** Studio lights. `alignLights(camera, target)` keeps them camera-relative. */
+export function createLights(scene, { shadows = true } = {}) {
   const hemi = new THREE.HemisphereLight(0xe4eaee, 0x3b3b3a, 0.7);
   scene.add(hemi);
 
   const key = new THREE.DirectionalLight(0xfffaf3, 3.3);
   key.position.set(-2.4, 2.9, 3.5);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  const sc = key.shadow.camera;
-  sc.left = -1.7;
-  sc.right = 1.7;
-  sc.top = 2.4;
-  sc.bottom = -1.2;
-  sc.near = 0.5;
-  sc.far = 12;
-  key.shadow.bias = -0.0005;
-  key.shadow.normalBias = 0.015;
-  key.shadow.radius = 4;
-  key.shadow.blurSamples = 12;
+  if (shadows) {
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    const sc = key.shadow.camera;
+    sc.left = -1.7;
+    sc.right = 1.7;
+    sc.top = 2.4;
+    sc.bottom = -1.2;
+    sc.near = 0.5;
+    sc.far = 12;
+    key.shadow.bias = -0.0005;
+    key.shadow.normalBias = 0.015;
+    key.shadow.radius = 4;
+    key.shadow.blurSamples = 12;
+  }
   scene.add(key, key.target);
 
   const fill = new THREE.DirectionalLight(0xe2e9ff, 0.4);
@@ -53,35 +52,96 @@ export function createStage({ grid = true } = {}) {
   // where the subject turns), so every view is lit like the reference sheet
   const rig = [key, fill, rim].map((l) => ({ light: l, offset: l.position.clone() }));
   const _t = new THREE.Vector3();
+  const Y = new THREE.Vector3(0, 1, 0);
   function alignLights(camera, target) {
-    const az = Math.atan2(camera.position.x - target.x, camera.position.z - target.z);
-    const top = Math.abs(camera.position.clone().sub(target).normalize().y) > 0.98;
+    const dx = camera.position.x - target.x;
+    const dz = camera.position.z - target.z;
+    const top = Math.hypot(dx, dz) < 0.2 * Math.abs(camera.position.y - target.y);
+    const az = top ? 0 : Math.atan2(dx, dz);
     for (const { light, offset } of rig) {
-      _t.copy(offset).applyAxisAngle(new THREE.Vector3(0, 1, 0), top ? 0 : az);
+      _t.copy(offset).applyAxisAngle(Y, az);
+      if (top) _t.y *= 2.2; // overhead camera: steeper light, shorter shadow
       light.position.copy(target).add(_t);
       light.target.position.copy(target);
       light.target.updateMatrixWorld();
     }
   }
+  return { hemi, key, fill, rim, alignLights };
+}
 
-  const floor = new THREE.Mesh(
-    new THREE.CircleGeometry(40, 72),
-    new THREE.MeshStandardMaterial({ color: 0x2c3135, roughness: 1, metalness: 0 }),
+function gridMaterial(color = 0x4a5257, size = 0.5, fade = 7) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: { uColor: { value: new THREE.Color(color) }, uSize: { value: size }, uFade: { value: fade } },
+    vertexShader: /* glsl */ `
+      varying vec3 vWorld;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vWorld = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor; uniform float uSize; uniform float uFade;
+      varying vec3 vWorld;
+      void main() {
+        vec2 c = vWorld.xz / uSize;
+        vec2 g = abs(fract(c - 0.5) - 0.5) / fwidth(c);
+        float line = 1.0 - min(min(g.x, g.y), 1.0);
+        float d = length(vWorld.xz);
+        float a = line * (1.0 - smoothstep(uFade * 0.35, uFade, d)) * 0.55;
+        gl_FragColor = vec4(uColor, a);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+function contactShadow(size = 1.25, strength = 0.55) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, `rgba(0,0,0,${strength})`);
+  grad.addColorStop(0.55, `rgba(0,0,0,${strength * 0.45})`);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size * 0.8),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
   );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.002;
+  m.renderOrder = 1;
+  m.name = 'ContactShadow';
+  return m;
+}
+
+export function createStage({ grid = true } = {}) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(BG);
+  const lights = createLights(scene);
+
+  // shadow-only floor so the ground melts into the backdrop
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.42 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   floor.name = 'Floor';
   scene.add(floor);
+  const contact = contactShadow();
+  scene.add(contact);
 
-  let gridHelper = null;
+  let gridMesh = null;
   if (grid) {
-    gridHelper = new THREE.GridHelper(80, 160, 0x3b4247, 0x353b40);
-    gridHelper.position.y = 0.002;
-    gridHelper.material.transparent = true;
-    gridHelper.material.opacity = 0.9;
-    scene.add(gridHelper);
+    gridMesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), gridMaterial());
+    gridMesh.rotation.x = -Math.PI / 2;
+    gridMesh.position.y = 0.001;
+    gridMesh.name = 'Grid';
+    scene.add(gridMesh);
   }
-  return { scene, key, fill, rim, hemi, floor, grid: gridHelper, alignLights };
+  return { scene, ...lights, floor, contact, grid: gridMesh };
 }
 
 // Camera presets (azimuth: 0 = looking at the character's face; negative =

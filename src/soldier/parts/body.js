@@ -11,9 +11,9 @@ import { DIM, quatFromAxes } from '../rig.js';
 
 // y, half width, front depth, back depth, centre z, superellipse power
 export const TORSO = [
-  [0.7, 0.237, 0.164, 0.16, 0.0, 2.6],
-  [0.74, 0.23, 0.159, 0.156, 0.0, 2.6],
-  [0.8, 0.218, 0.15, 0.147, 0.0, 2.6],
+  [0.69, 0.27, 0.18, 0.174, 0.0, 2.5],
+  [0.735, 0.262, 0.172, 0.167, 0.0, 2.5],
+  [0.8, 0.236, 0.158, 0.153, 0.0, 2.6],
   [0.875, 0.205, 0.141, 0.139, 0.004, 2.7],
   [0.96, 0.201, 0.143, 0.14, 0.008, 2.7],
   [1.06, 0.21, 0.15, 0.144, 0.01, 2.8],
@@ -133,9 +133,9 @@ export function buildTorso() {
     return r;
   });
   // inner lip closing the hem
-  const lip = ellipseRing({ n: N, rx: 0.2, rz: 0.136, rzBack: 0.132, y: 0.722, power: 2.6 });
+  const lip = ellipseRing({ n: N, rx: 0.236, rz: 0.156, rzBack: 0.15, y: 0.705, power: 2.5 });
   const poly = loft([lip, ...rings], { mat: 'uniform', start: 'flat', end: 'flat' });
-  poly.jitter(0.0055, 11, [1, 0.5, 1], (p) => p.y > 0.705 && p.y < 1.36);
+  poly.jitter(0.0055, 11, [1, 0.5, 1], (p) => p.y > 0.7 && p.y < 1.36);
   poly.skinBy((p) => torsoWeights(p.y));
 
   // placket down the centre front
@@ -440,47 +440,45 @@ export function buildHand(side) {
 // Trousers
 // ---------------------------------------------------------------------------
 
-export function buildThigh(side) {
+export function buildLeg(side) {
+  // One continuous trouser leg from inside the tunic down to the boot top.
+  // The knee is blended between the thigh and shin bones, so there is no
+  // seam or step when the leg bends.
+  const knee = DIM.hipY - DIM.kneeY;
   const p = axisTube(
     [
-      [-0.11],
-      [-0.07, 0.104, 0.11],
-      [0.0, 0.128, 0.138],
-      [0.1, 0.133, 0.141],
-      [0.22, 0.13, 0.136],
-      [0.33, 0.125, 0.13],
-      [0.368, 0.11, 0.111],
-      [0.396],
+      [-0.12],
+      [-0.08, 0.088, 0.096],
+      [0.0, 0.106, 0.122],
+      [0.08, 0.122, 0.135],
+      [0.17, 0.131, 0.138],
+      [0.26, 0.128, 0.134],
+      [knee, 0.124, 0.129],
+      [knee + 0.08, 0.123, 0.127],
+      [knee + 0.15, 0.129, 0.132],
+      [knee + 0.18, 0.13, 0.132],
+      [knee + 0.197, 0.1, 0.106],
     ],
     { n: 8, mat: 'uniform', phase: Math.PI / 8 },
   );
   p.jitter(0.0055, 31);
+  p.skinBy((q) => {
+    const t = smooth(clamp((q.y - (knee - 0.045)) / 0.09, 0, 1));
+    if (t <= 0) return [[`${side}UpperLeg`, 1]];
+    if (t >= 1) return [[`${side}LowerLeg`, 1]];
+    return [
+      [`${side}UpperLeg`, 1 - t],
+      [`${side}LowerLeg`, t],
+    ];
+  });
   p.rotateZ(Math.PI).translate(DIM.hipX, DIM.hipY, 0);
-  return sideify(p, side).bone(`${side}UpperLeg`);
-}
-
-export function buildShin(side) {
-  const p = axisTube(
-    [
-      [-0.064],
-      [-0.036, 0.112, 0.113],
-      [0.0, 0.129, 0.131],
-      [0.1, 0.128, 0.13],
-      [0.15, 0.134, 0.137],
-      [0.18, 0.133, 0.135],
-      [0.196, 0.1, 0.106],
-    ],
-    { n: 8, mat: 'uniform', phase: Math.PI / 8 },
-  );
-  p.jitter(0.0055, 32);
-  p.rotateZ(Math.PI).translate(DIM.hipX, DIM.kneeY, 0);
-  return sideify(p, side).bone(`${side}LowerLeg`);
+  return sideify(p, side);
 }
 
 export function buildBody() {
   const parts = [buildTorso(), buildCollar(), buildHead(), buildNeck()];
   for (const side of ['Left', 'Right']) {
-    parts.push(buildUpperArm(side), buildForearm(side), buildHand(side), buildThigh(side), buildShin(side));
+    parts.push(buildUpperArm(side), buildForearm(side), buildHand(side), buildLeg(side));
   }
   return parts;
 }

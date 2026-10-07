@@ -29,7 +29,7 @@ function chinStrap(fromY = 0.03, theta = 1.42) {
 }
 
 /** Faceted kettle/brodie style helmet with wide sloped brim (reference). */
-export function buildBrodieHelmet() {
+export function buildBrodieHelmet({ strap = true } = {}) {
   const profile = [
     [0.0, 0.238],
     [0.084, 0.214],
@@ -57,12 +57,12 @@ export function buildBrodieHelmet() {
   placeOnHead(shell, 0);
   const helmet = new Poly('olive');
   helmet.add(shell);
-  helmet.add(chinStrap());
+  if (strap) helmet.add(chinStrap());
   return helmet.bone('Head');
 }
 
 /** Rounded pot helmet (variant). */
-export function buildPotHelmet() {
+export function buildPotHelmet({ strap = true } = {}) {
   const profile = [
     [0.0, 0.205],
     [0.1, 0.18],
@@ -88,7 +88,7 @@ export function buildPotHelmet() {
   placeOnHead(shell, -2, 1.535, -0.008);
   const helmet = new Poly('olive');
   helmet.add(shell);
-  helmet.add(chinStrap(0.0, 1.45));
+  if (strap) helmet.add(chinStrap(0.0, 1.45));
   return helmet.bone('Head');
 }
 
@@ -135,7 +135,7 @@ export function buildFieldCap() {
 }
 
 export const HEADGEAR = {
-  brodie: { label: 'Brodie helmet', build: buildBrodieHelmet },
-  pot: { label: 'Pot helmet', build: buildPotHelmet },
+  brodie: { label: 'Brodie helmet', build: buildBrodieHelmet, display: () => buildBrodieHelmet({ strap: false }) },
+  pot: { label: 'Pot helmet', build: buildPotHelmet, display: () => buildPotHelmet({ strap: false }) },
   cap: { label: 'Field cap', build: buildFieldCap },
 };
