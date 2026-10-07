@@ -160,36 +160,42 @@ function braceSide(s) {
   const targets = [torsoMesh(), buildSleeve(side)];
   const path = [];
   const normals = [];
-  const hit = (origin, dir, lift = 0.003) => {
-    const from = origin.clone().addScaledVector(dir, 0.6);
-    const back = dir.clone().negate();
+  const outer = (from, dir) => {
     let best = null;
     for (const t of targets) {
-      const h = raycastPoly(t, from, back);
+      const h = raycastPoly(t, from, dir);
       if (h && (!best || h.t < best.t)) best = h;
     }
+    return best;
+  };
+  const hit = (origin, dir, lift = 0.003) => {
+    const best = outer(origin.clone().addScaledVector(dir, 0.6), dir.clone().negate());
     if (!best) return;
     path.push(best.point.addScaledVector(best.normal, lift));
     normals.push(best.normal);
   };
+  // each edge of the band settles onto the surface under it
+  const conform = (q, n) => {
+    const h = outer(q.clone().addScaledVector(n, 0.05), n.clone().negate());
+    return h && h.t < 0.09 ? h.point.addScaledVector(n, 0.003) : null;
+  };
   // straight down the chest, converging slightly towards the belt
-  const xAt = (y) => s * (0.135 + 0.062 * smooth(clamp((y - 0.93) / 0.4, 0, 1)));
+  const xAt = (y) => s * (0.135 + 0.038 * smooth(clamp((y - 0.93) / 0.4, 0, 1)));
   for (const y of [BELT_HIGH - 0.012, 1.0, 1.08, 1.16, 1.24, 1.3]) hit(new THREE.Vector3(xAt(y), y, 0), new THREE.Vector3(0, 0, 1));
-  // over the shoulder: fan of rays from inside the shoulder, front to back.
-  // The brace crosses the outer shoulder, over the seam where the sleeve
-  // meets the jacket, and comes back in to the top corner of the pack.
+  // over the shoulder: fan of rays from inside the shoulder, front to back,
+  // lying flat on the level shoulder shelf, then in to the top of the pack
   const xf = xAt(1.3);
-  const xt = 0.185 * s;
+  const xt = 0.163 * s;
   for (let i = 1; i <= 11; i++) {
     const u = i / 12;
     const psi = u * Math.PI;
     hit(new THREE.Vector3(xf + (xt - xf) * smooth(u), 1.27, -0.005), new THREE.Vector3(0, Math.sin(psi), Math.cos(psi)));
   }
   // down the back, behind the pack to the belt
-  for (const [y, x] of [[1.3, 0.165], [1.22, 0.153], [1.12, 0.15], [1.02, 0.15], [BELT_HIGH - 0.012, 0.15]]) {
+  for (const [y, x] of [[1.3, 0.158], [1.22, 0.152], [1.12, 0.15], [1.02, 0.15], [BELT_HIGH - 0.012, 0.15]]) {
     hit(new THREE.Vector3(x * s, y, 0), new THREE.Vector3(0, 0, -1));
   }
-  const st = strap(path, normals, 0.05, 0.011, { mat: 'webbing' });
+  const st = strap(path, normals, 0.05, 0.011, { mat: 'webbing', conform });
   st.skinBy(jacketWeights);
   // brace attachment buckle at the belt (front)
   const buckle = chamferBox(0.042, 0.03, 0.01, 0.002, { mat: 'metal' });
@@ -236,8 +242,8 @@ function packBody({ w = PACK.w, top = PACK.top, bottom = PACK.bottom, front = PA
   return body;
 }
 
-/** Pull the front of a pack onto the curved back of the jacket. */
-function hugBack(poly, front, depth, gap = 0.004) {
+/** Pull the front of a pack onto the curved back of the jacket (resting on the braces). */
+function hugBack(poly, front, depth, gap = 0.017) {
   poly.warp((p) => {
     const t = Math.min(1, Math.max(0, (p.z - (front - depth / 2)) / (depth / 2)));
     const shift = (torsoBackZ(p.x, p.y) - gap - front) * t;
@@ -350,10 +356,14 @@ export function buildRucksack() {
   return p.bone('Chest');
 }
 
+// rigid kit keeps its size when the body is fitted (see proportions.js)
+const BELT_FIT = { anchor: [0, 0.91, 0] };
+const PACK_FIT = { anchor: [0, 1.25, -0.2] };
+
 export const BELTS = {
-  pouches: { label: 'Belt + 4 pouches', build: buildBeltWithPouches },
-  canteen: { label: 'Belt, canteen, tool', build: buildBeltWithCanteen },
-  plain: { label: 'Plain belt', build: buildPlainBelt },
+  pouches: { label: 'Belt + 4 pouches', build: buildBeltWithPouches, fit: BELT_FIT },
+  canteen: { label: 'Belt, canteen, tool', build: buildBeltWithCanteen, fit: BELT_FIT },
+  plain: { label: 'Plain belt', build: buildPlainBelt, fit: BELT_FIT },
 };
 
 export const HARNESS = {
@@ -361,7 +371,7 @@ export const HARNESS = {
 };
 
 export const PACKS = {
-  field: { label: 'Field pack', build: buildFieldPack },
-  sides: { label: 'Pack + side pouches', build: buildFieldPackWithSides },
-  rucksack: { label: 'Rucksack + blanket', build: buildRucksack },
+  field: { label: 'Field pack', build: buildFieldPack, fit: PACK_FIT },
+  sides: { label: 'Pack + side pouches', build: buildFieldPackWithSides, fit: PACK_FIT },
+  rucksack: { label: 'Rucksack + blanket', build: buildRucksack, fit: PACK_FIT },
 };

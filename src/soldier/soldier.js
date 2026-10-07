@@ -11,6 +11,7 @@ import { FOOTWEAR } from './parts/footwear.js';
 import { BELTS, HARNESS, PACKS } from './parts/webbing.js';
 import { WEAPONS } from './parts/weapons.js';
 import { applyPose } from './poses.js';
+import { fitPart } from './proportions.js';
 
 export const GEAR_SLOTS = [
   { id: 'head', label: 'Headgear', node: 'Head', items: HEADGEAR, optional: true, default: 'brodie' },
@@ -43,8 +44,9 @@ export class Soldier {
     this.updatePose();
   }
 
-  _skinned(name, polys) {
-    const { geometry, slots, triangles } = buildGeometry(Array.isArray(polys) ? polys : [polys], {
+  _skinned(name, polys, fit = null) {
+    const list = (Array.isArray(polys) ? polys : [polys]).map((p) => fitPart(p, fit));
+    const { geometry, slots, triangles } = buildGeometry(list, {
       slotOrder: SLOT_ORDER,
       boneIndex: this.rig.boneIndex,
     });
@@ -78,7 +80,7 @@ export class Soldier {
       this.weaponSocket.add(mesh);
       return mesh;
     }
-    return this._skinned(name, def.build());
+    return this._skinned(name, def.build(), def.fit);
   }
 
   item(slotId, id) {

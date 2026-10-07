@@ -1,6 +1,6 @@
 # Low-Poly Rifleman
 
-A low-poly infantry rifleman rebuilt in 3D from the character sheet: faceted brim helmet with chin strap, olive tunic with fold-down collar, shoulder braces, belt with four ammo pouches, field pack, bloused trousers, boots and a bolt-action rifle. It's rigged as a humanoid, the gear is modular, and it's ready to drop into a game engine.
+A low-poly infantry rifleman rebuilt in 3D from the character sheet: faceted brim helmet with chin strap, olive tunic with fold-down collar, shoulder braces, belt with four ammo pouches, field pack, bloused trousers, boots and a bolt-action rifle. The gear and details follow the sheet; the body has realistic adult proportions. It's rigged as a humanoid, the gear is modular, and it's ready to drop into a game engine.
 
 ![Turnaround: front, 3/4, side, back and top-down views, plus weapon and gear details](docs/sheet.png)
 
@@ -9,7 +9,7 @@ A low-poly infantry rifleman rebuilt in 3D from the character sheet: faceted bri
 | Path | What it is |
 | --- | --- |
 | `index.html` | The viewer. One self-contained file: open it in a browser, no install or server needed. |
-| `models/rifleman.glb` | Game-ready model in the reference loadout: mesh, skeleton, materials, 5 animation clips. |
+| `models/rifleman.glb` | Game-ready model in the reference loadout: mesh, skeleton, materials, 6 animation clips. |
 | `models/rifleman-modular-kit.glb` | The same rig with **every** gear variant included as its own mesh, for swapping gear in your engine. |
 | `src/soldier/` | The model source (procedural three.js geometry, rig, poses, animations). |
 | `src/viewer/` | The viewer UI. |
@@ -23,7 +23,7 @@ Open `index.html`. You can:
 - **Switch to "Turnaround sheet"** to get a live version of the reference board: five views, palette column, and the weapon and gear panels. It updates with whatever loadout and colours you pick. **Save image** exports it as a PNG.
 - **Change gear** per slot (headgear, backpack, harness, belt kit, footwear, weapon). The `ref` tag marks the item that matches the original sheet.
 - **Recolour** any of the nine palette slots, or pick a preset (olive drab, desert, winter, field grey, jungle, navy).
-- **Play animations**: Ready (the sheet pose), Idle, Walk, Aim, A-pose.
+- **Play animations**: Ready (the sheet pose), Idle, Walk, Run, Aim, A-pose.
 - **Download GLB** for the current loadout, or the **modular kit**.
 
 Your loadout and colours are remembered in the browser.
@@ -35,12 +35,12 @@ Both GLBs are glTF 2.0 binary files. They pass the Khronos glTF validator with n
 | Property | Value |
 | --- | --- |
 | Units / axes | metres, Y-up, character faces +Z (glTF convention) |
-| Height | 1.80 m with helmet |
+| Height | 1.90 m (1.96 m with helmet), adult proportions of about 7.3 heads |
 | Triangles | ≈ 6,050 for the reference loadout (flat-shaded, hard normals) |
 | Skeleton | 30 bones, humanoid names |
 | Bind pose | A-pose (arms 45° down). The rifle-ready pose is saved as the default pose. |
 | Materials | 10 flat-colour PBR materials: one per palette slot, plus `shirt`, a darker shade of the uniform colour seen in the collar opening |
-| Animations | `Ready`, `Idle` (4 s loop), `Walk` (1 s in-place loop), `Aim`, `APose` |
+| Animations | `Ready`, `Idle` (4 s loop), `Walk` (1.1 s in-place loop), `Run` (0.72 s in-place loop), `Aim`, `APose` |
 
 **Bones:** `Root › Hips › Spine › Chest › Neck › Head`, plus for each side `LeftShoulder › LeftUpperArm › LeftLowerArm › LeftHand` (with `LeftFingers1/2` and `LeftThumb1/2`) and `LeftUpperLeg › LeftLowerLeg › LeftFoot › LeftToes`. Unity's Humanoid avatar, Unreal's IK Retargeter and Godot's humanoid profile can all map these names automatically, so other humanoid animations (Mixamo etc.) can be retargeted onto the character.
 
@@ -81,6 +81,8 @@ export const HEADGEAR = { /* ... */ beret: { label: 'Beret', build: buildBeret }
 
 Register it in the slot's table (`HEADGEAR`, `PACKS`, `BELTS`, `HARNESS`, `FOOTWEAR`, `WEAPONS`). It then shows up in the viewer's loadout panel and in the GLB exports. Anything that follows the body (straps, belts) can use the jacket-surface helpers in `body.js` (`torsoPoint`, `torsoSurface`, `torsoMesh`).
 
+Parts are modelled at the sheet's proportions and then fitted to the adult body by `src/soldier/proportions.js`, which moves every vertex with the bones it is skinned to (cloth on the trunk and legs stretches, the head and helmet scale together, arm parts move with the shoulder). Rigid kit that should keep its size, like a pouch or a pack, declares an anchor instead: `fit: { anchor: [x, y, z] }` in its table entry. The same file holds the proportion settings (`KEYS` for joint heights, `HEAD_SCALE`, neck length, chest width).
+
 ## Development
 
 ```bash
@@ -96,4 +98,6 @@ The bundle inlines three.js, so `index.html` works offline. Fonts load from Goog
 
 ## Notes on matching the sheet
 
-Proportions, colours and gear details were measured from the sheet, and the colours were calibrated against the rendered pixels. The five views on the sheet don't agree exactly on the rifle angle: the side view shows it pointing further forward than the front view allows. The pose follows the front and 3/4 views, where the rifle crosses the body from the right chest down to the left knee.
+Colours, gear details and the shape of the clothing were measured from the sheet, and the colours were calibrated against the rendered pixels. The sheet's figure is stylised (big head, no visible neck, short legs). The model keeps its look but has adult proportions: legs and trunk about 15% longer, a smaller head on a visible neck, and shoulders that slope down from the neck like the sheet's. Widths at every height were measured against the sheet's front, side and back views after allowing for the longer body. The five views on the sheet don't agree exactly on the rifle angle: the side view shows it pointing further forward than the front view allows. The pose follows the front and 3/4 views, where the rifle crosses the body from the right chest down to the left knee.
+
+The walk and run are in-place cycles built from gait measurements: heel strike, roll over the foot and toe-off, a straight knee in mid-stance and a folded knee in swing, with the pelvis turning, dipping and bobbing (the run has a flight phase with both feet off the ground). The rifle stays at the ready in both. When aiming, the butt is bedded in the shoulder pocket and the head rests on the stock with the eye behind the sights.

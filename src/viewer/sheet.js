@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { createLights, placeCamera } from './stage.js';
 import { buildGeometry } from '../soldier/lowpoly.js';
 import { SLOT_ORDER } from '../soldier/palette.js';
+import { fitPart } from '../soldier/proportions.js';
 import { GEAR_SLOTS } from '../soldier/soldier.js';
 
 export const BOARD = { w: 1448, h: 1086 };
@@ -73,7 +74,7 @@ export class Sheet {
       const id = s.loadout[cell.slot];
       if (!id) continue;
       const def = slot.items[id];
-      this.displays[cell.slot] = center(make(def.display ? def.display() : def.build()));
+      this.displays[cell.slot] = center(make(fitPart(def.display ? def.display() : def.build(), def.fit)));
     }
     const wid = s.loadout.weapon;
     if (wid) {
@@ -123,12 +124,12 @@ export class Sheet {
     R.clear();
 
     // character views (the soldier stays put; the camera and studio orbit)
-    const target = new THREE.Vector3(0, 0.93, 0);
+    const target = new THREE.Vector3(0, 1.0, 0);
     for (const v of SHEET_VIEWS) {
       const r = this.rect(v.x0, FIG.y0, v.x1, FIG.y1, W, H);
       cam.fov = 20;
-      const distance = v.id === 'top' ? 5.3 : 5.75;
-      placeCamera(cam, v.id, { distance, target: v.id === 'top' ? new THREE.Vector3(0.04, 0.9, 0.16) : target });
+      const distance = v.id === 'top' ? 5.7 : 6.2;
+      placeCamera(cam, v.id, { distance, target: v.id === 'top' ? new THREE.Vector3(0.04, 0.97, 0.16) : target });
       this.stage.alignLights(cam, target);
       this.drawCell(r, this.stage.scene, cam);
     }

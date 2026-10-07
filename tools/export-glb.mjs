@@ -1,5 +1,5 @@
 // Exports the game-ready GLB files by driving the built viewer headlessly.
-//   models/rifleman.glb               reference loadout + 5 animation clips
+//   models/rifleman.glb               reference loadout + 6 animation clips
 //   models/rifleman-modular-kit.glb   every gear variant as its own mesh
 import { chromium } from 'playwright';
 import fs from 'node:fs/promises';

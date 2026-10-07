@@ -8,6 +8,7 @@
 // LeftLowerLeg, LeftFoot, LeftToes ...) so Unity's Humanoid avatar, Unreal's
 // IK retargeter and Godot's SkeletonProfileHumanoid can auto-map them.
 import * as THREE from 'three';
+import { fitBone } from './proportions.js';
 
 export const DIM = {
   shoulderX: 0.25,
@@ -116,7 +117,7 @@ export class Rig {
     for (const [name, parent, pos] of boneDefs()) {
       const b = new THREE.Bone();
       b.name = name;
-      const w = new THREE.Vector3(...pos);
+      const w = fitBone(name, new THREE.Vector3(...pos));
       this.bindWorld[name] = w;
       if (parent) {
         this.byName[parent].add(b);

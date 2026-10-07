@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { Poly, loft, ellipseRing, axisTube, chamferBox, thickSheet, strap, lerp, smooth, clamp, raycastPoly } from '../lowpoly.js';
 import { DIM, quatFromAxes, armBindMatrix } from '../rig.js';
+import { HEAD_SCALE } from '../proportions.js';
 
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
@@ -15,14 +16,14 @@ const Z_AXIS = new THREE.Vector3(0, 0, 1);
 export const TORSO = [
   [0.735, 0.274, 0.182, 0.176, 0.0, 2.5],
   [0.775, 0.262, 0.172, 0.167, 0.0, 2.5],
-  [0.835, 0.232, 0.156, 0.151, 0.002, 2.6],
-  [0.9, 0.206, 0.142, 0.14, 0.005, 2.7],
-  [0.96, 0.202, 0.143, 0.14, 0.008, 2.7],
-  [1.06, 0.21, 0.15, 0.144, 0.01, 2.8],
-  [1.16, 0.216, 0.155, 0.147, 0.01, 2.7],
-  [1.24, 0.218, 0.152, 0.146, 0.004, 2.7],
-  [1.31, 0.222, 0.138, 0.137, -0.002, 2.5],
-  [1.36, 0.214, 0.118, 0.124, -0.004, 2.4],
+  [0.835, 0.23, 0.156, 0.151, 0.002, 2.6],
+  [0.9, 0.197, 0.142, 0.14, 0.005, 2.7],
+  [0.96, 0.196, 0.143, 0.14, 0.008, 2.7],
+  [1.06, 0.207, 0.15, 0.144, 0.01, 2.8],
+  [1.16, 0.218, 0.155, 0.147, 0.01, 2.7],
+  [1.24, 0.225, 0.152, 0.146, 0.004, 2.7],
+  [1.31, 0.226, 0.138, 0.137, -0.002, 2.5],
+  [1.343, 0.206, 0.12, 0.126, -0.004, 2.4],
 ];
 
 export function torsoParams(y) {
@@ -107,8 +108,9 @@ function superPoint(theta, a, bf, bb, cz, pw, y) {
   return new THREE.Vector3(Math.sign(sn) * Math.pow(Math.abs(sn), e) * a, y, cz + Math.sign(c) * Math.pow(Math.abs(c), e) * (c >= 0 ? bf : bb));
 }
 const TOP_RINGS = [
-  // trapezius: broad, nearly level shoulders, a little higher at the sides
-  (t) => superPoint(t, 0.182, 0.096, 0.106, -0.006, 2.2, 1.38 + 0.024 * Math.pow(Math.sin(t), 2)),
+  // trapezius: the shoulder line slopes down from the neck and rolls over
+  // into the sleeve (a V-shaped upper body rather than a square box)
+  (t) => superPoint(t, 0.158, 0.098, 0.108, -0.006, 2.3, 1.369 + 0.008 * Math.pow(Math.sin(t), 2)),
   (t) => superPoint(t, 0.082, 0.074, 0.08, -0.008, 2, 1.394 + 0.014 * (1 - Math.cos(t))),
 ];
 const PROFILE = [...TORSO.map(([y, a, bf, bb, cz, pw]) => (t) => superPoint(t, a, bf, bb, cz, pw, y)), ...TOP_RINGS];
@@ -309,12 +311,15 @@ export function buildHead() {
 }
 
 export function buildNeck() {
+  // the top rings ride on the head, which is scaled down by HEAD_SCALE when
+  // the body is fitted (proportions.js): model them larger to compensate
+  const k = 1 / HEAD_SCALE;
   const neck = axisTube(
     [
       [1.28, 0.061, 0.058, 0, -0.006],
-      [1.35, 0.064, 0.061, 0, -0.008],
-      [1.44, 0.06, 0.058, 0, -0.004],
-      [1.475, 0.045, 0.045, 0, 0],
+      [1.35, 0.062, 0.059, 0, -0.008],
+      [1.44, 0.058 * k, 0.056 * k, 0, -0.004],
+      [1.475, 0.045 * k, 0.045 * k, 0, 0],
     ],
     { n: 8, mat: 'skin' },
   );
@@ -360,21 +365,21 @@ export function buildSleeve(side) {
   const L = DIM.upperArm + DIM.lowerArm;
   const p = axisTube(
     [
-      [-0.095, 0.056, 0.06],
-      [-0.055, 0.061, 0.066],
-      [-0.015, 0.066, 0.069],
-      [0.035, 0.07, 0.07],
-      [0.12, 0.07, 0.068],
-      [0.22, 0.067, 0.065, 0, 0, 0.12],
-      [E - 0.045, 0.064, 0.062, 0, 0, 0.04],
-      [E, 0.066, 0.064],
-      [E + 0.045, 0.061, 0.059],
-      [E + 0.12, 0.058, 0.056, 0, 0, -0.14],
-      [L - 0.08, 0.054, 0.052],
-      [L - 0.068, 0.059, 0.057],
-      [L - 0.008, 0.058, 0.056],
-      [L - 0.002, 0.046, 0.044],
-      [L - 0.03, 0.042, 0.04],
+      [-0.095, 0.056, 0.063],
+      [-0.055, 0.063, 0.071],
+      [-0.015, 0.069, 0.075],
+      [0.035, 0.075, 0.077],
+      [0.12, 0.076, 0.074],
+      [0.22, 0.072, 0.07, 0, 0, 0.12],
+      [E - 0.045, 0.068, 0.066, 0, 0, 0.04],
+      [E, 0.071, 0.069],
+      [E + 0.045, 0.068, 0.066],
+      [E + 0.12, 0.064, 0.062, 0, 0, -0.14],
+      [L - 0.08, 0.057, 0.055],
+      [L - 0.068, 0.064, 0.062],
+      [L - 0.008, 0.063, 0.061],
+      [L - 0.002, 0.05, 0.048],
+      [L - 0.03, 0.045, 0.043],
     ],
     { n: 10, mat: 'uniform', phase: Math.PI / 10 },
   );
@@ -386,16 +391,17 @@ export function buildSleeve(side) {
   p.jitter(0.001, 21, [1, 0.4, 1], (q) => q.y < L - 0.012);
   const along = p.pos.map((q) => q.y);
   p.rotateZ(-Math.PI / 2).translate(DIM.shoulderX, DIM.shoulderY, 0);
-  // Bend into the A-pose around the shoulder: the inner end stays level and
-  // its top becomes the top of the shoulder, so the sleeve rolls over the
-  // joint into the arm instead of ending in a cap.
+  // Bend into the A-pose around the shoulder: the inner end slopes with the
+  // shoulder line and its top becomes the top of the shoulder, so the sleeve
+  // rolls over the joint into the arm instead of ending in a cap.
   const full = armBindMatrix('Left');
   const pivot = new THREE.Vector3(DIM.shoulderX, DIM.shoulderY, 0);
+  const SLOPE = 27;
   p.warp((q) => {
-    const t = smooth(clamp((q.x - DIM.shoulderX + 0.07) / 0.15, 0, 1));
+    const t = smooth(clamp((q.x - DIM.shoulderX + 0.04) / 0.13, 0, 1));
     if (t >= 1) return q.applyMatrix4(full);
-    if (t <= 0) return q;
-    q.sub(pivot).applyAxisAngle(Z_AXIS, (-t * DIM.armDrop * Math.PI) / 180).add(pivot);
+    const deg = SLOPE + t * (DIM.armDrop - SLOPE);
+    q.sub(pivot).applyAxisAngle(Z_AXIS, (-deg * Math.PI) / 180).add(pivot);
   });
   sideify(p, side);
   return p.skinBy((q, i) => sleeveWeights(side, along[i], q));

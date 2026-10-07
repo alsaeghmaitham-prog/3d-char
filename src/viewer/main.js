@@ -62,7 +62,7 @@ function runApp() {
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 100);
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 0.92, 0);
+  controls.target.set(0, 0.99, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.minDistance = 1.0;
@@ -70,7 +70,7 @@ function runApp() {
   controls.maxPolarAngle = Math.PI * 0.53;
   controls.screenSpacePanning = true;
   controls.autoRotateSpeed = 1.6;
-  const viewDistance = 4.1;
+  const viewDistance = 4.4;
   let dirty = true;
   let tween = null;
   const timer = new THREE.Timer();
@@ -167,7 +167,7 @@ function runApp() {
     const preset = view === 'top' ? { az: 0, el: 86 } : v;
     const tmp = camera.clone();
     const fitWidth = 1.4 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(0.2, camera.aspect));
-    const distance = Math.max(view === 'top' ? 4.4 : viewDistance, fitWidth);
+    const distance = Math.max(view === 'top' ? 4.7 : viewDistance, fitWidth);
     placeCamera(tmp, preset, { distance, target: controls.target });
     tmp.up.set(0, 1, 0);
     if (!animate) {
@@ -435,7 +435,7 @@ function runApp() {
     $('#stats').textContent = `${tris.toLocaleString('en-US')} tris · ${soldier.rig.bones.length} bones`;
   }
   const spec = [
-    ['Height', '1.80 m with helmet (Y-up, metres)'],
+    ['Height', '1.90 m, 1.96 m with helmet; adult proportions, about 7.3 heads (Y-up, metres)'],
     ['Facing', '+Z forward, glTF convention'],
     ['Skeleton', `${soldier.rig.bones.length} bones, humanoid names (Hips, Spine, Chest, LeftUpperArm…)`],
     ['Bind pose', 'A-pose (arms 45° down); the ready pose is stored as the default pose'],
@@ -683,7 +683,7 @@ function runShots() {
       camera.up.set(0, 1, 0);
       camera.lookAt(vec(params.get(v + 't') || '0,0.9,0'));
       camera.updateProjectionMatrix();
-    } else placeCamera(camera, v, { distance: +params.get('d') || 4.15 });
+    } else placeCamera(camera, v, { distance: +params.get('d') || 4.5 });
     stage.alignLights(camera, CAMERA_TARGET);
     renderer.render(stage.scene, camera);
     out[v] = canvas.toDataURL('image/png');

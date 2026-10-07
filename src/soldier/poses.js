@@ -3,6 +3,7 @@
 // grips) and the weapon socket is computed from the solved right hand.
 import * as THREE from 'three';
 import { quatFromAxes } from './rig.js';
+import { remapY } from './proportions.js';
 import { WEAPONS } from './parts/weapons.js';
 
 const D = THREE.MathUtils.degToRad;
@@ -13,48 +14,53 @@ const Y = new THREE.Vector3(0, 1, 0);
 export const POSES = {
   ready: {
     label: 'Rifle ready (reference)',
-    hips: { pos: [0, 0.842, 0.0], rot: [2, 0, 0] },
+    hips: { pos: [0, remapY(0.842), 0.0], rot: [2, 0, 0] },
     spine: [3, 0, 0],
     chest: [5, 0, 0],
     neck: [-5, 0, 0],
     head: [-4, 0, 0],
-    shoulders: { Left: [0, -3, 2], Right: [0, 3, -2] },
+    // collarbones angled down: sloping shoulders, not a square shelf
+    shoulders: { Left: [0, -3, -7], Right: [0, 3, 7] },
     feet: { Left: { pos: [0.228, 0.03], yaw: 9 }, Right: { pos: [-0.228, -0.012], yaw: -11 } },
     knees: { Left: [0.3, 0, 1], Right: [-0.3, 0, 1] },
-    weapon: { origin: [-0.04, 0.99, 0.285], dir: [0.683, -0.631, 0.368], roll: 40 },
+    weapon: { origin: [-0.04, remapY(0.99), 0.285], dir: [0.683, -0.631, 0.368], roll: 40 },
     elbows: { Left: [0.6, -0.3, -0.75], Right: [-0.8, -0.4, -0.5] },
     // right fist wraps the wrist of the stock in line with the forearm, thumb
     // side up; k tilts the fist from "straight wrist" (0) to the stock axis (1)
     wrap: { Right: { thumb: [0, 1, 0], k: 0.25 } },
-    unarmed: { Left: [0.29, 0.72, 0.06], Right: [-0.29, 0.72, 0.06] },
+    unarmed: { Left: [0.29, remapY(0.72), 0.06], Right: [-0.29, remapY(0.72), 0.06] },
   },
   aim: {
     label: 'Aiming',
-    hips: { pos: [0, 0.83, 0.0], rot: [4, 18, 0] },
-    spine: [4, -6, 0],
-    chest: [4, -8, 0],
-    neck: [-4, -2, 0],
-    head: [10, -2, 6],
-    shoulders: { Left: [0, -2, 4], Right: [0, 2, -10] },
-    feet: { Left: { pos: [0.16, 0.16], yaw: 25 }, Right: { pos: [-0.2, -0.14], yaw: 30 } },
-    knees: { Left: [0.3, 0, 1], Right: [-0.2, 0, 1] },
-    weapon: { origin: [-0.135, 1.37, 0.27], dir: [0.02, 0.0, 1], roll: 0 },
-    elbows: { Left: [0.3, -1, -0.2], Right: [-1, -0.6, -0.3] },
-    unarmed: { Left: [0.29, 0.72, 0.06], Right: [-0.29, 0.72, 0.06] },
+    // bladed stance: torso turned right, left shoulder towards the target,
+    // head turned back to the target and laid on the stock
+    hips: { pos: [0, remapY(0.83), 0.0], rot: [3, -20, 0] },
+    spine: [3, -8, 0],
+    chest: [5, -8, 0],
+    neck: [11, 14, 6],
+    head: [2, 20, 14],
+    shoulders: { Left: [0, -6, -5], Right: [0, -4, -12] }, // firing shoulder raised to the cheek
+    feet: { Left: { pos: [0.13, 0.2], yaw: -18 }, Right: { pos: [-0.2, -0.17], yaw: -62 } },
+    knees: { Left: [0.2, 0, 1], Right: [-0.4, 0, 1] },
+    // butt plate bedded in the right shoulder pocket (offset from the shoulder
+    // joint in the chest's frame), rifle level and pointing at the target
+    weapon: { shoulder: [0.15, -0.035, 0.105], origin: [-0.135, remapY(1.37), 0.27], dir: [0.0, 0.01, 1], roll: 0 },
+    elbows: { Left: [0.25, -1, -0.15], Right: [-0.7, -0.7, -0.25] },
+    unarmed: { Left: [0.29, remapY(0.72), 0.06], Right: [-0.29, remapY(0.72), 0.06] },
   },
   relaxed: {
     label: 'Relaxed',
-    hips: { pos: [0, 0.855, 0.0], rot: [0, 0, 0] },
+    hips: { pos: [0, remapY(0.855), 0.0], rot: [0, 0, 0] },
     spine: [1, 0, 0],
     chest: [2, 0, 0],
     neck: [0, 0, 0],
     head: [2, 0, 0],
-    shoulders: { Left: [0, 0, 0], Right: [0, 0, 0] },
+    shoulders: { Left: [0, 0, -7], Right: [0, 0, 7] },
     feet: { Left: { pos: [0.16, 0.0], yaw: 8 }, Right: { pos: [-0.16, 0.0], yaw: -8 } },
     knees: { Left: [0.1, 0, 1], Right: [-0.1, 0, 1] },
-    weapon: { origin: [-0.31, 0.83, 0.07], dir: [0.0, 0.97, 0.24], roll: 90, oneHand: true },
+    weapon: { origin: [-0.31, remapY(0.83), 0.07], dir: [0.0, 0.97, 0.24], roll: 90, oneHand: true },
     elbows: { Left: [0.3, -0.2, -1], Right: [-0.3, -0.2, -1] },
-    unarmed: { Left: [0.3, 0.73, 0.05], Right: [-0.3, 0.73, 0.05] },
+    unarmed: { Left: [0.3, remapY(0.73), 0.05], Right: [-0.3, remapY(0.73), 0.05] },
   },
   bind: { label: 'A-pose (bind)', bind: true },
 };
@@ -69,6 +75,15 @@ const CONTACT = {
   Left: new THREE.Vector3(0.056, -0.027, 0),
   Right: new THREE.Vector3(-0.056, -0.027, 0),
 };
+
+/** Weapon frame for a pose: a fixed placement, or the butt in the shoulder. */
+function weaponFrame(rig, W, wp) {
+  if (!wp.shoulder || !W.butt) return weaponMatrix(wp);
+  const M = weaponMatrix({ ...wp, origin: [0, 0, 0] });
+  const pocket = rig.worldPos('RightUpperArm').add(V(wp.shoulder).applyQuaternion(rig.getWorldQuat('Chest')));
+  M.setPosition(pocket.sub(W.butt.clone().applyMatrix4(M)));
+  return M;
+}
 
 export function weaponMatrix(w) {
   const z = V(w.dir).normalize();
@@ -124,7 +139,7 @@ export function applyPose(soldier, poseId, opts = {}) {
     const pitch = f.pitch || 0;
     const footQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(D(pitch), D(f.yaw), 0, 'YXZ'));
     // ankle sits above the sole; account for heel/toe pitch around the sole contact
-    const ankleOffset = new THREE.Vector3(0, 0.115, -0.01).applyQuaternion(footQ);
+    const ankleOffset = rig.bindWorld[`${side}Foot`].clone().setX(0).applyQuaternion(footQ);
     const ankle = new THREE.Vector3(f.pos[0], lift, f.pos[1]).add(ankleOffset);
     rig.solveTwoBone(`${side}UpperLeg`, `${side}LowerLeg`, `${side}Foot`, ankle, V(P.knees[side]), X);
     rig.setWorldQuat(`${side}Foot`, footQ);
@@ -135,7 +150,7 @@ export function applyPose(soldier, poseId, opts = {}) {
   const W = weaponId ? WEAPONS[weaponId] : null;
   const wp = opts.weapon || P.weapon;
   if (W) {
-    const M = weaponMatrix(wp);
+    const M = weaponFrame(rig, W, wp);
     const sides = wp.oneHand ? ['Right'] : ['Right', 'Left'];
     for (const side of sides) {
       const g = W.grips[side.toLowerCase()];

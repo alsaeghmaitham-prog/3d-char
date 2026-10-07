@@ -438,7 +438,7 @@ export function extrudeProfile(profile, thickness, chamfer = 0, { mat = 'uniform
  * outward surface normal at each point; the strap lies on the surface and is
  * extruded outwards by `thickness`.
  */
-export function strap(path, normals, width, thickness, { mat = 'webbing', capStart = true, capEnd = true, widths = null } = {}) {
+export function strap(path, normals, width, thickness, { mat = 'webbing', capStart = true, capEnd = true, widths = null, conform = null } = {}) {
   const poly = new Poly(mat);
   const rings = [];
   for (let i = 0; i < path.length; i++) {
@@ -450,12 +450,15 @@ export function strap(path, normals, width, thickness, { mat = 'webbing', capSta
     nrm.addScaledVector(tan, -nrm.dot(tan)).normalize();
     const bin = new THREE.Vector3().crossVectors(tan, nrm).normalize();
     const w = (widths ? widths[i] : width) / 2;
-    const r = [
-      poly.vv(p.clone().addScaledVector(bin, -w)),
-      poly.vv(p.clone().addScaledVector(bin, w)),
-      poly.vv(p.clone().addScaledVector(bin, w).addScaledVector(nrm, thickness)),
-      poly.vv(p.clone().addScaledVector(bin, -w).addScaledVector(nrm, thickness)),
-    ];
+    // optional conform(point, normal): drops each edge onto the surface below,
+    // so the band bends across its width over a rounded shoulder
+    const edge = (sgn) => {
+      const q = p.clone().addScaledVector(bin, sgn * w);
+      return (conform && conform(q, nrm)) || q;
+    };
+    const a = edge(-1);
+    const b = edge(1);
+    const r = [poly.vv(a), poly.vv(b), poly.vv(b.clone().addScaledVector(nrm, thickness)), poly.vv(a.clone().addScaledVector(nrm, thickness))];
     rings.push(r);
   }
   for (let k = 0; k < rings.length - 1; k++) bridge(poly, rings[k], rings[k + 1], mat, true);

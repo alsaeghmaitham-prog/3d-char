@@ -208,12 +208,14 @@ export const WEAPONS = {
     label: 'Bolt-action rifle',
     build: () => buildRifle(),
     grips: RIFLE_GRIPS,
+    butt: V(0, -0.11, -0.284), // centre of the butt plate (bedded in the shoulder when aiming)
     length: 1.09,
   },
   carbine: {
     label: 'Carbine',
     build: () => buildRifle({ short: true }),
     grips: { right: RIFLE_GRIPS.right, left: { ...RIFLE_GRIPS.left, point: V(0.002, -0.054, 0.22) } },
+    butt: V(0, -0.11, -0.284),
     length: 0.94,
   },
   smg: {
@@ -233,6 +235,7 @@ export const WEAPONS = {
         curl: { f1: 80, f2: 75, t1: [0, 0, 30], t2: 30 },
       },
     },
+    butt: V(0, -0.085, -0.302),
     length: 0.78,
   },
 };

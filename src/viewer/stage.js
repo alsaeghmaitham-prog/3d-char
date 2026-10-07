@@ -154,9 +154,9 @@ export const VIEWS = {
   top: { label: 'Top down', az: 0, el: 88 },
 };
 
-export const CAMERA_TARGET = new THREE.Vector3(0, 0.9, 0);
+export const CAMERA_TARGET = new THREE.Vector3(0, 0.98, 0);
 
-export function placeCamera(camera, view, { distance = 4.6, target = CAMERA_TARGET } = {}) {
+export function placeCamera(camera, view, { distance = 4.95, target = CAMERA_TARGET } = {}) {
   const v = typeof view === 'string' ? VIEWS[view] : view;
   const az = THREE.MathUtils.degToRad(v.az);
   const el = THREE.MathUtils.degToRad(v.el);
